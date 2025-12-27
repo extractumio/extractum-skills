@@ -13,23 +13,16 @@ description: Create production-ready Claude agent projects using the Claude Code
 4. Create project structure using templates
 5. Customize `src/prompts/system.j2` for agent's role
 6. Customize `.claude/settings.local.json` permissions based on required tools
-7. Create `.venv` and install dependencies
-8. Initialize git repository if not exists
-9. Output concise confirmation with next steps (no .md explanation files)
+7. Initialize git repository if not exists
+8. Output concise confirmation with next steps (no .md explanation files)
 
 ---
 
 ## Prerequisites
 
 Before creating an agent, verify:
-
-```bash
-# Check Python version (requires 3.10+)
-python3 --version | grep -E "3\.(1[0-9]|[2-9][0-9])" || echo "ERROR: Python 3.10+ required"
-
-# Verify pip is available
-python3 -m pip --version || echo "ERROR: pip not available"
-```
+- Python 3.10+ is installed
+- pip is available
 
 ---
 
@@ -37,18 +30,8 @@ python3 -m pip --version || echo "ERROR: pip not available"
 
 Before creating files, detect the project structure:
 
-**Step 1: Check if folder is empty**
-```bash
-[ -z "$(ls -A . 2>/dev/null)" ] && echo "empty" || echo "not empty"
-```
-
-**Step 2: Detect existing structure**
-```bash
-ls -d */ 2>/dev/null | head -5
-ls .vscode/launch.json requirements.txt pyproject.toml 2>/dev/null
-```
-
-**Step 3: Determine agent location**
+1. **Check if folder is empty or has existing structure** (look for `src/`, `agents/`, `scripts/`, etc.)
+2. **Determine agent location based on structure:**
 
 | Condition | Agent Location | Project Root |
 |-----------|---------------|--------------|
@@ -58,126 +41,31 @@ ls .vscode/launch.json requirements.txt pyproject.toml 2>/dev/null
 | Has `scripts/` | `scripts/{agent-name}/` | Current dir |
 | Other | `./{agent-name}/` | Current dir |
 
-**Step 4: Check for naming conflicts**
-```bash
-# If agent location already exists, prompt for action
-if [ -d "{agent-location}" ]; then
-    echo "Directory {agent-location} already exists. Options:"
-    echo "  1. Overwrite existing"
-    echo "  2. Choose different name"
-    echo "  3. Abort"
-fi
-```
-
-**Step 5: Place project-level files at root**
-- `.venv/` → project root
-- `.vscode/launch.json` → project root (merge if exists)
-- `requirements.txt` → project root (merge if exists)
-- `.gitignore` → project root (merge if exists)
-- `.env.example` → project root (create if not exists)
+3. **Check for naming conflicts** — if agent location exists, prompt user to overwrite, rename, or abort
+4. **Place project-level files at root:**
+   - `.vscode/launch.json` → project root (merge if exists)
+   - `requirements.txt` → project root (merge if exists)
+   - `.gitignore` → project root (merge if exists)
+   - `.env.example` → project root (create if not exists)
 
 ---
 
 ## Merging Existing Files
 
-### Merging launch.json
+When project-level files already exist, merge rather than overwrite:
 
-When `.vscode/launch.json` exists, append new configuration to `configurations` array:
-
-```bash
-# Read existing configurations, add new one, write back
-# Use jq if available, otherwise Python:
-python3 -c "
-import json
-from pathlib import Path
-
-launch_file = Path('.vscode/launch.json')
-config = json.loads(launch_file.read_text())
-new_config = {
-    'name': 'Run {agent-name}',
-    'type': 'debugpy',
-    'request': 'launch',
-    # ... rest of config
-}
-# Avoid duplicates by name
-existing_names = [c['name'] for c in config.get('configurations', [])]
-if new_config['name'] not in existing_names:
-    config['configurations'].append(new_config)
-    launch_file.write_text(json.dumps(config, indent=2))
-"
-```
-
-### Merging requirements.txt
-
-When `requirements.txt` exists, append only missing packages:
-
-```bash
-# Required packages for claude-agent
-AGENT_DEPS="claude-code-sdk jinja2 pydantic pydantic-settings python-dotenv colorlog"
-
-for pkg in $AGENT_DEPS; do
-    grep -qi "^${pkg}" requirements.txt || echo "$pkg" >> requirements.txt
-done
-```
-
-### Merging .gitignore
-
-Append only missing patterns:
-
-```bash
-PATTERNS="logs/ .env __pycache__/ *.pyc .venv/"
-for pattern in $PATTERNS; do
-    grep -qxF "$pattern" .gitignore 2>/dev/null || echo "$pattern" >> .gitignore
-done
-```
+- **`.vscode/launch.json`**: Append new configuration to `configurations` array (avoid duplicates by name)
+- **`requirements.txt`**: Append only missing packages
+- **`.gitignore`**: Append only missing patterns
 
 ---
 
-## Setup Commands
+## Post-Creation Steps
 
-After creating files, run:
+After creating files:
 
-```bash
-# Create venv if not exists (with error handling)
-if [ ! -d .venv ]; then
-    python3 -m venv .venv || {
-        echo "ERROR: Failed to create virtual environment"
-        echo "Ensure python3-venv is installed: sudo apt install python3-venv"
-        exit 1
-    }
-fi
-
-# Activate (cross-platform)
-if [ -f .venv/bin/activate ]; then
-    source .venv/bin/activate
-elif [ -f .venv/Scripts/activate ]; then
-    source .venv/Scripts/activate
-else
-    echo "ERROR: Could not find venv activation script"
-    exit 1
-fi
-
-# Upgrade pip first (avoid dependency resolver issues)
-pip install --upgrade pip
-
-# Install dependencies with error handling
-pip install -r requirements.txt || {
-    echo "ERROR: Failed to install dependencies"
-    echo "Check network connection and requirements.txt syntax"
-    exit 1
-}
-```
-
-### Initialize Git Repository
-
-```bash
-# Initialize git if not already a repo
-if [ ! -d .git ]; then
-    git init
-    git add .gitignore
-    echo "Git repository initialized"
-fi
-```
+1. **Initialize git** (if not already a repo)
+2. **Do not create or activate venv** — leave environment setup to the user
 
 ---
 
@@ -185,9 +73,8 @@ fi
 
 ```
 {project-root}/
-├── .venv/                          # Virtual environment
 ├── .vscode/
-│   └── launch.json                 # Debug config (uses .venv)
+│   └── launch.json                 # Debug config
 ├── .gitignore
 ├── requirements.txt
 ├── {agent-location}/               # Adaptive (see above)
@@ -213,12 +100,12 @@ fi
 ### requirements.txt
 
 ```txt
-claude-code-sdk>=0.1.0
-jinja2>=3.1.0
-pydantic>=2.0.0
-pydantic-settings>=2.0.0
-python-dotenv>=1.0.0
-colorlog>=6.0.0
+claude-code-sdk
+jinja2
+pydantic
+pydantic-settings
+python-dotenv
+colorlog
 ```
 
 > **Note**: Pin major versions to avoid breaking changes. Update periodically.
