@@ -11,7 +11,7 @@ description: Create production-ready Claude agent projects using the Claude Agen
 2. **Detect working folder** (see below)
 3. **Check for naming conflicts** (existing agent with same name)
 4. Create project structure using templates
-5. Customize `src/prompts/system.j2` for agent's role
+5. Customize `task.md` for agent's task
 6. Customize `.claude/settings.local.json` permissions based on required tools
 7. Initialize git repository if not exists
 8. **Create virtual environment and install dependencies**:
@@ -96,9 +96,6 @@ After creating files:
 │   ├── src/
 │   │   ├── __init__.py
 │   │   ├── agent.py
-│   │   ├── prompts/
-│   │   │   ├── system.j2
-│   │   │   └── user.j2
 │   │   ├── schemas.py
 │   │   └── exceptions.py
 │   ├── logs/
@@ -114,9 +111,7 @@ After creating files:
 
 ```txt
 claude-agent-sdk
-jinja2
 pydantic
-pydantic-settings
 python-dotenv
 colorlog
 ```
@@ -134,7 +129,7 @@ ANTHROPIC_API_KEY=your-api-key-here
 # AGENT_MAX_TURNS=50
 # AGENT_TIMEOUT_SECONDS=1800
 # AGENT_MAX_BUDGET_USD=10.0
-# AGENT_PERMISSION_MODE=acceptEdits
+# AGENT_PERMISSION_MODE=bypassPermissions  # default: bypassPermissions (allows all tools)
 ```
 
 ### .gitignore
@@ -332,267 +327,156 @@ class AgentResult(BaseModel):
 ### src/agent.py
 
 ```python
-"""Core agent implementation."""
+"""Agent execution logic."""
 import asyncio
-import json
+import logging
 import os
-import uuid
-from datetime import datetime
-from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
-from claude_agent_sdk import (
+from claude_agent_sdk import query
+from claude_agent_sdk.types import (
     AssistantMessage,
     ClaudeAgentOptions,
-    query,
     ResultMessage,
     SystemMessage,
-    TextBlock,
-    ToolUseBlock,
+    UserMessage,
 )
-from jinja2 import Environment, FileSystemLoader
 
 from .exceptions import (
     AgentError,
     MaxTurnsExceededError,
     ServerError,
+    SessionIncompleteError,
 )
 from .schemas import AgentResult, LLMMetrics, TaskStatus
 
-# Configuration (from environment with sensible defaults)
-MAX_TURNS: int = int(os.getenv("AGENT_MAX_TURNS", "50"))
-TIMEOUT_SECONDS: int = int(os.getenv("AGENT_TIMEOUT_SECONDS", "1800"))
-MAX_BUDGET_USD: float = float(os.getenv("AGENT_MAX_BUDGET_USD", "10.0"))
+logger = logging.getLogger(__name__)
 
-# Model aliases: "claude-sonnet-4-5", "claude-opus-4"
-DEFAULT_MODEL: str = os.getenv("AGENT_MODEL", "claude-sonnet-4-5")
-
-# Permission modes: "default", "acceptEdits", "plan", "bypassPermissions"
-DEFAULT_PERMISSION_MODE: str = os.getenv("AGENT_PERMISSION_MODE", "acceptEdits")
-
-# Paths
-SRC_DIR: Path = Path(__file__).parent
-PROMPTS_DIR: Path = SRC_DIR / "prompts"
-LOGS_DIR: Path = SRC_DIR.parent / "logs"
+# ANSI color codes for verbose output
+BLUE = "\033[94m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+CYAN = "\033[96m"
+MAGENTA = "\033[95m"
+RESET = "\033[0m"
+BOLD = "\033[1m"
 
 
-def _setup_jinja() -> Environment:
-    return Environment(
-        loader=FileSystemLoader(str(PROMPTS_DIR)),
-        autoescape=False,
-        trim_blocks=True,
-        lstrip_blocks=True,
-    )
-
-
-def _render_prompt(template_name: str, **kwargs: Any) -> str:
-    env: Environment = _setup_jinja()
-    template = env.get_template(template_name)
-    return template.render(**kwargs)
-
-
-def _parse_output_json(working_dir: str) -> dict[str, Any]:
-    output_path: Path = Path(working_dir) / "output.json"
-    if output_path.exists():
-        try:
-            return json.loads(output_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            return {}
-    return {}
-
-
-def _create_result(
-    output_data: dict[str, Any],
-    metrics: Optional[LLMMetrics] = None,
-    error: Optional[str] = None,
-) -> AgentResult:
-    status_str: str = output_data.get("status", "FAILED")
-    try:
-        status = TaskStatus(status_str)
-    except ValueError:
-        status = TaskStatus.FAILED
-
-    return AgentResult(
-        status=status,
-        summary=output_data.get("summary", "No summary provided"),
-        details=output_data.get("details"),
-        data=output_data.get("data", {}),
-        metrics=metrics,
-        error=error,
-    )
-
-
-def _extract_text_from_message(message: Any) -> str:
-    """Extract text content from a message object."""
-    if isinstance(message, AssistantMessage):
-        texts: list[str] = []
-        for block in message.content:
-            if isinstance(block, TextBlock):
-                texts.append(block.text)
-            elif isinstance(block, ToolUseBlock):
-                texts.append(f"[Tool: {block.name}]")
-        return "\n".join(texts)
-    if isinstance(message, ResultMessage):
-        cost: float = message.total_cost_usd or 0.0
-        return f"[Result] Cost: ${cost:.4f}, Turns: {message.num_turns}"
-    if isinstance(message, SystemMessage):
-        return f"[System: {message.subtype}]"
-    return str(message)
-
-
-async def run_agent(
-    task: str,
-    working_dir: str = ".",
-    additional_dirs: Optional[list[str]] = None,
-    parameters: Optional[dict[str, Any]] = None,
-) -> AgentResult:
-    """Run the agent with the given task."""
-    session_id: str = str(uuid.uuid4())[:8]
-    timestamp: str = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_dir: Path = LOGS_DIR / f"{timestamp}_{session_id}"
-    log_dir.mkdir(parents=True, exist_ok=True)
-
-    working_path: Path = Path(working_dir).resolve()
-    output_file: str = str(working_path / "output.json")
-
-    system_prompt: str = _render_prompt(
-        "system.j2",
-        **(parameters or {}),
-    )
-
-    user_prompt: str = _render_prompt(
-        "user.j2",
-        working_dir=str(working_path),
-        output_file=output_file,
-        task=task,
-        **(parameters or {}),
-    )
-
-    # Combine system prompt with user prompt for the query
-    full_prompt: str = f"{system_prompt}\n\n---\n\n{user_prompt}"
-
-    # Configure agent options
-    # Note: Uses Claude CLI authentication (run `claude login` first)
-    options = ClaudeAgentOptions(
-        model=DEFAULT_MODEL,
-        permission_mode=DEFAULT_PERMISSION_MODE,
-        cwd=working_path,
-        max_turns=MAX_TURNS,
-        max_budget_usd=MAX_BUDGET_USD,
-        allowed_tools=["Bash", "Read", "Write", "Edit", "Grep", "Glob", "WebFetch"],
-    )
-
-    start_time: datetime = datetime.now()
-    full_response: list[str] = []
-    num_turns: int = 0
-    total_cost: float = 0.0
-    claude_session_id: str = ""
-
-    try:
-        async for message in query(prompt=full_prompt, options=options):
-            text_content: str = _extract_text_from_message(message)
-
-            if isinstance(message, AssistantMessage):
-                full_response.append(text_content)
-                print(f"Assistant: {text_content[:200]}...")
-            elif isinstance(message, ResultMessage):
-                total_cost = message.total_cost_usd or 0.0
-                num_turns = message.num_turns
-                claude_session_id = message.session_id
-                print(f"Completed: {text_content}")
-            elif isinstance(message, SystemMessage):
-                print(f"System: {message.subtype}")
-
-        duration_ms: int = int((datetime.now() - start_time).total_seconds() * 1000)
-
-        metrics = LLMMetrics(
-            model=DEFAULT_MODEL,
-            duration_ms=duration_ms,
-            num_turns=num_turns,
-            session_id=claude_session_id or session_id,
-            total_cost_usd=total_cost if total_cost > 0 else None,
-        )
-
-        output_data: dict[str, Any] = _parse_output_json(str(working_path))
-
-        log_file: Path = log_dir / "agent.log"
-        log_file.write_text("\n".join(full_response), encoding="utf-8")
-
-        output_log: Path = log_dir / "output.json"
-        output_log.write_text(json.dumps(output_data, indent=2), encoding="utf-8")
-
-        return _create_result(output_data, metrics)
-
-    except asyncio.TimeoutError as e:
-        raise MaxTurnsExceededError(f"Agent timed out after {TIMEOUT_SECONDS}s") from e
-    except Exception as e:
-        error_msg: str = str(e)
-        if "server" in error_msg.lower() or "api" in error_msg.lower():
-            raise ServerError(f"API error: {error_msg}") from e
-        raise AgentError(f"Agent failed: {error_msg}") from e
+def print_verbose(prefix: str, content: str, color: str = RESET) -> None:
+    """Print verbose output with colored prefix."""
+    print(f"{color}{BOLD}[{prefix}]{RESET} {content}", flush=True)
 
 
 async def run_agent_with_timeout(
     task: str,
     working_dir: str = ".",
     additional_dirs: Optional[list[str]] = None,
-    parameters: Optional[dict[str, Any]] = None,
+    verbose: bool = True,
 ) -> AgentResult:
-    return await asyncio.wait_for(
-        run_agent(task, working_dir, additional_dirs, parameters),
-        timeout=TIMEOUT_SECONDS,
+    """Run the agent with configuration from environment."""
+    max_turns = int(os.getenv("AGENT_MAX_TURNS", "50"))
+    timeout_seconds = int(os.getenv("AGENT_TIMEOUT_SECONDS", "1800"))
+    max_budget = float(os.getenv("AGENT_MAX_BUDGET_USD", "10.0"))
+    model = os.getenv("AGENT_MODEL", "claude-sonnet-4-5")
+    permission_mode = os.getenv("AGENT_PERMISSION_MODE", "bypassPermissions")
+
+    logger.info(f"Starting agent with model={model}, max_turns={max_turns}")
+
+    options = ClaudeAgentOptions(
+        model=model,
+        cwd=working_dir,
+        permission_mode=permission_mode,
+        max_turns=max_turns,
+        max_budget_usd=max_budget,
+        add_dirs=additional_dirs or [],
     )
-```
 
-### src/prompts/system.j2
+    try:
+        result_text = ""
+        session_id = ""
+        num_turns = 0
+        total_cost = None
 
-```jinja2
-**Role**
-You are an intelligent automation agent.
-Your goal is to complete the assigned task accurately and efficiently.
+        async def run_query():
+            nonlocal result_text, session_id, num_turns, total_cost
+            turn_count = 0
 
-**Available Tools**
-- **Bash**: Execute shell commands (curl, wget, git, jq, etc.)
-- **Read**: Read file contents
-- **Write**: Create or overwrite files
-- **Edit**: Modify existing files
-- **Grep**: Search for patterns in files
-- **Glob**: Find files by pattern
-- **WebFetch**: Fetch content from URLs
+            async for message in query(prompt=task, options=options):
+                if verbose:
+                    if isinstance(message, AssistantMessage):
+                        turn_count += 1
+                        print_verbose(f"TURN {turn_count}", "", CYAN)
+                        content = getattr(message, 'message', None)
+                        if content:
+                            msg_content = getattr(content, 'content', None)
+                            if msg_content:
+                                for block in msg_content:
+                                    block_type = getattr(block, 'type', None)
+                                    if block_type == 'text':
+                                        text = getattr(block, 'text', '')
+                                        if text:
+                                            preview = text[:500] + ("..." if len(text) > 500 else "")
+                                            print_verbose("ASSISTANT", preview, GREEN)
+                                    elif block_type == 'tool_use':
+                                        tool_name = getattr(block, 'name', 'unknown')
+                                        tool_input = getattr(block, 'input', {})
+                                        print_verbose("TOOL", f"{tool_name}", YELLOW)
+                                        if tool_name == 'Bash' and 'command' in tool_input:
+                                            print_verbose("CMD", tool_input['command'][:200], MAGENTA)
 
-**Rules**
-- Execute deterministically; avoid unnecessary actions
-- Make minimal changes to achieve the goal
-- Verify results before reporting completion
-- generate and use python scripts when it would be more efficient and effective for a sequence of steps or API calls instead of executing a series of steps one by one from agentic loop. 
+                    elif isinstance(message, UserMessage):
+                        content = getattr(message, 'message', None)
+                        if content:
+                            msg_content = getattr(content, 'content', None)
+                            if msg_content:
+                                for block in msg_content:
+                                    block_type = getattr(block, 'type', None)
+                                    if block_type == 'tool_result':
+                                        result_content = getattr(block, 'content', '')
+                                        if isinstance(result_content, str) and result_content:
+                                            preview = result_content[:300] + ("..." if len(result_content) > 300 else "")
+                                            print_verbose("RESULT", preview, BLUE)
 
-**Workflow**
-1. **Understand**: Analyze the task requirements
-2. **Execute**: Perform each step carefully
-3. **Verify**: Confirm the task is complete
-4. **Report**: Create output.json with results
+                    elif isinstance(message, SystemMessage):
+                        print_verbose("SYSTEM", str(message)[:200], CYAN)
 
-**Output Requirement**
-Create `output.json`:
-```json
-{
-  "status": "SUCCESS" | "PARTIAL" | "FAILED",
-  "summary": "Brief description of outcome",
-  "data": { ... }
-}
-```
-```
+                if isinstance(message, ResultMessage):
+                    result_text = getattr(message, 'result', str(message))
+                    session_id = getattr(message, 'session_id', '')
+                    num_turns = getattr(message, 'num_turns', turn_count)
+                    total_cost = getattr(message, 'total_cost_usd', None)
+                    if verbose:
+                        cost_str = f"${total_cost:.4f}" if total_cost else "N/A"
+                        print_verbose("COMPLETE", f"Turns: {num_turns}, Cost: {cost_str}", GREEN)
 
-### src/prompts/user.j2
+        await asyncio.wait_for(run_query(), timeout=timeout_seconds)
 
-```jinja2
-**Working Directory**: {{ working_dir }}
-**Output File**: {{ output_file }}
+        metrics = LLMMetrics(
+            model=model,
+            duration_ms=0,
+            num_turns=num_turns,
+            session_id=session_id,
+            total_cost_usd=total_cost,
+        )
 
-**Task**:
-{{ task }}
+        return AgentResult(
+            status=TaskStatus.SUCCESS,
+            summary="Task completed successfully",
+            details=result_text,
+            metrics=metrics,
+        )
 
-Execute this task following your workflow. Create output.json when complete.
+    except asyncio.TimeoutError:
+        raise AgentError(f"Agent timed out after {timeout_seconds} seconds")
+    except Exception as e:
+        error_msg = str(e)
+        if "max_turns" in error_msg.lower():
+            raise MaxTurnsExceededError(f"Exceeded {max_turns} turns")
+        if "server" in error_msg.lower() or "api" in error_msg.lower():
+            raise ServerError(f"API error: {error_msg}")
+        if "incomplete" in error_msg.lower():
+            raise SessionIncompleteError(f"Session incomplete: {error_msg}")
+        raise AgentError(f"Agent execution failed: {error_msg}")
 ```
 
 ### claude_agent.py
@@ -780,7 +664,7 @@ Environment variables for customization:
 | `AGENT_MAX_TURNS` | `50` | Maximum conversation turns |
 | `AGENT_TIMEOUT_SECONDS` | `1800` | Execution timeout |
 | `AGENT_MAX_BUDGET_USD` | `10.0` | Maximum API cost |
-| `AGENT_PERMISSION_MODE` | `acceptEdits` | Permission mode |
+| `AGENT_PERMISSION_MODE` | `bypassPermissions` | Permission mode |
 
 **Valid permission modes:**
 - `default` - CLI prompts for dangerous tools
