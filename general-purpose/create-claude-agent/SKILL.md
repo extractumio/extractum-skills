@@ -8,34 +8,175 @@ description: Create production-ready Claude agent projects using the Claude Code
 ## Instructions
 
 1. Ask user about agent's purpose and required tools (Bash, Read, Write, Edit, Grep, Skill)
-2. Create project structure using templates below
-3. Customize `src/prompts/system.j2` for agent's role
-4. Configure `src/agent.py` settings (model, tools, limits)
-5. Guide user to run: `pip install -r requirements.txt && python claude_agent.py`
+2. **Detect working folder** (see below)
+3. **Check for naming conflicts** (existing agent with same name)
+4. Create project structure using templates
+5. Customize `src/prompts/system.j2` for agent's role
+6. Customize `.claude/settings.local.json` permissions based on required tools
+7. Create `.venv` and install dependencies
+8. Initialize git repository if not exists
+9. Output concise confirmation with next steps (no .md explanation files)
 
 ---
 
-## Example: ArXiv Article Fetcher
+## Prerequisites
 
-**task.md**:
-```markdown
-# Fetch Latest ML Articles
+Before creating an agent, verify:
 
-Fetch the last 7 articles from https://arxiv.org/list/cs.LG/recent
+```bash
+# Check Python version (requires 3.10+)
+python3 --version | grep -E "3\.(1[0-9]|[2-9][0-9])" || echo "ERROR: Python 3.10+ required"
 
-For each article, extract:
-- Title
-- Authors
-- ArXiv link (format: https://arxiv.org/abs/{id})
-- One-sentence summary based on the title
-
-Display results in a readable format and save to output.json.
+# Verify pip is available
+python3 -m pip --version || echo "ERROR: pip not available"
 ```
 
-**Usage**:
+---
+
+## Working Folder Detection
+
+Before creating files, detect the project structure:
+
+**Step 1: Check if folder is empty**
 ```bash
-pip install -r requirements.txt
-python claude_agent.py
+[ -z "$(ls -A . 2>/dev/null)" ] && echo "empty" || echo "not empty"
+```
+
+**Step 2: Detect existing structure**
+```bash
+ls -d */ 2>/dev/null | head -5
+ls .vscode/launch.json requirements.txt pyproject.toml 2>/dev/null
+```
+
+**Step 3: Determine agent location**
+
+| Condition | Agent Location | Project Root |
+|-----------|---------------|--------------|
+| Empty folder | `./src/`, `./logs/`, `./claude_agent.py` | Current dir |
+| Has `src/` | `src/agents/{agent-name}/` | Current dir |
+| Has `agents/` | `agents/{agent-name}/` | Current dir |
+| Has `scripts/` | `scripts/{agent-name}/` | Current dir |
+| Other | `./{agent-name}/` | Current dir |
+
+**Step 4: Check for naming conflicts**
+```bash
+# If agent location already exists, prompt for action
+if [ -d "{agent-location}" ]; then
+    echo "Directory {agent-location} already exists. Options:"
+    echo "  1. Overwrite existing"
+    echo "  2. Choose different name"
+    echo "  3. Abort"
+fi
+```
+
+**Step 5: Place project-level files at root**
+- `.venv/` → project root
+- `.vscode/launch.json` → project root (merge if exists)
+- `requirements.txt` → project root (merge if exists)
+- `.gitignore` → project root (merge if exists)
+- `.env.example` → project root (create if not exists)
+
+---
+
+## Merging Existing Files
+
+### Merging launch.json
+
+When `.vscode/launch.json` exists, append new configuration to `configurations` array:
+
+```bash
+# Read existing configurations, add new one, write back
+# Use jq if available, otherwise Python:
+python3 -c "
+import json
+from pathlib import Path
+
+launch_file = Path('.vscode/launch.json')
+config = json.loads(launch_file.read_text())
+new_config = {
+    'name': 'Run {agent-name}',
+    'type': 'debugpy',
+    'request': 'launch',
+    # ... rest of config
+}
+# Avoid duplicates by name
+existing_names = [c['name'] for c in config.get('configurations', [])]
+if new_config['name'] not in existing_names:
+    config['configurations'].append(new_config)
+    launch_file.write_text(json.dumps(config, indent=2))
+"
+```
+
+### Merging requirements.txt
+
+When `requirements.txt` exists, append only missing packages:
+
+```bash
+# Required packages for claude-agent
+AGENT_DEPS="claude-code-sdk jinja2 pydantic pydantic-settings python-dotenv colorlog"
+
+for pkg in $AGENT_DEPS; do
+    grep -qi "^${pkg}" requirements.txt || echo "$pkg" >> requirements.txt
+done
+```
+
+### Merging .gitignore
+
+Append only missing patterns:
+
+```bash
+PATTERNS="logs/ .env __pycache__/ *.pyc .venv/"
+for pattern in $PATTERNS; do
+    grep -qxF "$pattern" .gitignore 2>/dev/null || echo "$pattern" >> .gitignore
+done
+```
+
+---
+
+## Setup Commands
+
+After creating files, run:
+
+```bash
+# Create venv if not exists (with error handling)
+if [ ! -d .venv ]; then
+    python3 -m venv .venv || {
+        echo "ERROR: Failed to create virtual environment"
+        echo "Ensure python3-venv is installed: sudo apt install python3-venv"
+        exit 1
+    }
+fi
+
+# Activate (cross-platform)
+if [ -f .venv/bin/activate ]; then
+    source .venv/bin/activate
+elif [ -f .venv/Scripts/activate ]; then
+    source .venv/Scripts/activate
+else
+    echo "ERROR: Could not find venv activation script"
+    exit 1
+fi
+
+# Upgrade pip first (avoid dependency resolver issues)
+pip install --upgrade pip
+
+# Install dependencies with error handling
+pip install -r requirements.txt || {
+    echo "ERROR: Failed to install dependencies"
+    echo "Check network connection and requirements.txt syntax"
+    exit 1
+}
+```
+
+### Initialize Git Repository
+
+```bash
+# Initialize git if not already a repo
+if [ ! -d .git ]; then
+    git init
+    git add .gitignore
+    echo "Git repository initialized"
+fi
 ```
 
 ---
@@ -43,25 +184,26 @@ python claude_agent.py
 ## Project Structure
 
 ```
-{project-name}/
-├── .claude/
-│   └── settings.local.json
+{project-root}/
+├── .venv/                          # Virtual environment
 ├── .vscode/
-│   └── launch.json
-├── src/
-│   ├── __init__.py
-│   ├── agent.py
-│   ├── prompts/
-│   │   ├── system.j2
-│   │   └── user.j2
-│   ├── schemas.py
-│   └── exceptions.py
-├── logs/
-├── .env
+│   └── launch.json                 # Debug config (uses .venv)
 ├── .gitignore
 ├── requirements.txt
-├── task.md
-└── claude_agent.py
+├── {agent-location}/               # Adaptive (see above)
+│   ├── .claude/
+│   │   └── settings.local.json
+│   ├── src/
+│   │   ├── __init__.py
+│   │   ├── agent.py
+│   │   ├── prompts/
+│   │   │   ├── system.j2
+│   │   │   └── user.j2
+│   │   ├── schemas.py
+│   │   └── exceptions.py
+│   ├── logs/
+│   ├── task.md
+│   └── claude_agent.py
 ```
 
 ---
@@ -71,31 +213,59 @@ python claude_agent.py
 ### requirements.txt
 
 ```txt
-claude-agent-sdk>=0.1.18
+claude-code-sdk>=0.1.0
 jinja2>=3.1.0
-pydantic>=2.12.0
-pydantic-settings>=2.12.0
-python-dotenv>=1.2.1
-colorlog>=6.10.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0
+colorlog>=6.0.0
 ```
 
-### .env
+> **Note**: Pin major versions to avoid breaking changes. Update periodically.
 
-```bash
-ANTHROPIC_API_KEY=your-api-key
+### .env.example
+
+```env
+# Required: Your Anthropic API key
+ANTHROPIC_API_KEY=your-api-key-here
+
+# Optional: Model selection (default: claude-sonnet-4-5-20250929)
+# ANTHROPIC_MODEL=claude-sonnet-4-5-20250929
+
+# Optional: Agent configuration
+# AGENT_MAX_TURNS=100
+# AGENT_TIMEOUT_SECONDS=1800
+# AGENT_ENABLE_SKILLS=false
 ```
 
 ### .gitignore
 
 ```gitignore
+# Agent logs and output
 logs/
+output.json
+
+# Environment and secrets
 .env
+.env.local
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
 .venv/
+venv/
+*.egg-info/
+
+# IDE
+.idea/
+*.swp
+*.swo
 ```
 
 ### .claude/settings.local.json
+
+Customize permissions based on agent's required capabilities:
 
 ```json
 {
@@ -112,32 +282,54 @@ __pycache__/
     ],
     "deny": [
       "Bash(rm -rf:*)",
-      "Bash(sudo:*)"
+      "Bash(sudo:*)",
+      "Bash(chmod 777:*)",
+      "Bash(> /dev:*)"
     ]
   }
 }
 ```
 
+**Permission Customization Guide:**
+
+| Agent Type | Additional Allow | Additional Deny |
+|------------|-----------------|-----------------|
+| Web scraper | `Bash(node:*)` | `Bash(ssh:*)` |
+| Data processor | `Bash(jq:*)`, `Bash(awk:*)` | `Bash(curl:*)` |
+| DevOps | `Bash(docker:*)`, `Bash(kubectl:*)` | — |
+| File manager | `Bash(mv:*)`, `Bash(cp:*)` | `Bash(curl:*)` |
+
+> **Security**: Start with minimal permissions, add as needed. Never allow `sudo` or destructive operations without explicit user confirmation.
+
 ### .vscode/launch.json
+
+Use `{agent-path}` relative to project root. Uses cross-platform Python path:
 
 ```json
 {
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Run Claude Agent",
+      "name": "Run {agent-name}",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/claude_agent.py",
+      "python": "${command:python.interpreterPath}",
+      "program": "${workspaceFolder}/{agent-path}/claude_agent.py",
       "args": [],
       "console": "integratedTerminal",
       "justMyCode": true,
-      "env": { "PYTHONPATH": "${workspaceFolder}" },
-      "cwd": "${workspaceFolder}"
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/{agent-path}",
+        "PYTHONUNBUFFERED": "1"
+      },
+      "cwd": "${workspaceFolder}/{agent-path}",
+      "envFile": "${workspaceFolder}/.env"
     }
   ]
 }
 ```
+
+> **Cross-platform note**: Using `${command:python.interpreterPath}` instead of hardcoded `.venv/bin/python` ensures compatibility with Windows (`.venv\Scripts\python.exe`) and Unix systems. Requires Python extension in VS Code/Cursor.
 
 ### task.md
 
@@ -154,6 +346,12 @@ Describe what the agent should accomplish.
 
 ## Expected Output
 Describe what output.json should contain.
+```
+
+### src/__init__.py
+
+```python
+"""Agent source package."""
 ```
 
 ### src/exceptions.py
@@ -236,18 +434,19 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, ResultMessage
+from claude_code_sdk import ClaudeCodeOptions, ClaudeCodeClient, ResultMessage
 from jinja2 import Environment, FileSystemLoader
 
 from .exceptions import AgentError, MaxTurnsExceededError, ServerError, SessionIncompleteError
 from .schemas import AgentResult, LLMMetrics, TaskStatus
 
-# Configuration
+# Configuration (from environment with sensible defaults)
 MODEL: str = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929")
-ALLOWED_TOOLS: list[str] = ["Bash", "Read", "Write", "Edit", "Grep"]
-MAX_TURNS: int = 100
-TIMEOUT_SECONDS: int = 1800
-ENABLE_SKILLS: bool = False
+ALLOWED_TOOLS: list[str] = os.environ.get("AGENT_ALLOWED_TOOLS", "Bash,Read,Write,Edit,Grep").split(",")
+MAX_TURNS: int = int(os.environ.get("AGENT_MAX_TURNS", "100"))
+TIMEOUT_SECONDS: int = int(os.environ.get("AGENT_TIMEOUT_SECONDS", "1800"))
+ENABLE_SKILLS: bool = os.environ.get("AGENT_ENABLE_SKILLS", "false").lower() == "true"
+MAX_LOG_FILES: int = int(os.environ.get("AGENT_MAX_LOG_FILES", "50"))
 
 # Paths
 PROJECT_ROOT: Path = Path(__file__).parent.parent
@@ -266,17 +465,33 @@ def _generate_session_id() -> str:
     return f"{ts}_{uuid.uuid4().hex[:8]}"
 
 
+def _cleanup_old_logs() -> None:
+    """Remove oldest log directories if exceeding MAX_LOG_FILES."""
+    if not LOGS_DIR.exists():
+        return
+    log_dirs: list[Path] = sorted(
+        [d for d in LOGS_DIR.iterdir() if d.is_dir()],
+        key=lambda x: x.stat().st_mtime
+    )
+    while len(log_dirs) > MAX_LOG_FILES:
+        oldest: Path = log_dirs.pop(0)
+        for f in oldest.iterdir():
+            f.unlink()
+        oldest.rmdir()
+
+
 def _setup_session(session_id: str) -> Path:
+    _cleanup_old_logs()
     session_dir: Path = LOGS_DIR / session_id
     session_dir.mkdir(parents=True, exist_ok=True)
     return session_dir
 
 
-def _build_options(session_dir: Path, working_dir: str, additional_dirs: list[str]) -> ClaudeAgentOptions:
-    tools: list[str] = list(ALLOWED_TOOLS)
+def _build_options(session_dir: Path, working_dir: str, additional_dirs: list[str]) -> ClaudeCodeOptions:
+    tools: list[str] = [t.strip() for t in ALLOWED_TOOLS if t.strip()]
     if ENABLE_SKILLS and "Skill" not in tools:
         tools.append("Skill")
-    return ClaudeAgentOptions(
+    return ClaudeCodeOptions(
         system_prompt=_jinja_env.get_template("system.j2").render(),
         model=MODEL,
         max_turns=MAX_TURNS,
@@ -329,7 +544,7 @@ async def run_agent(
     result: Optional[ResultMessage] = None
 
     try:
-        async with ClaudeSDKClient(options=options) as client:
+        async with ClaudeCodeClient(options=options) as client:
             await client.query(user_prompt)
             with log_file.open("w", encoding="utf-8") as f:
                 async for message in client.receive_response():
@@ -533,6 +748,32 @@ if __name__ == "__main__":
 
 ---
 
+## Completion Output
+
+After creating the agent, output only:
+
+```
+✓ Agent "{agent-name}" created at {agent-path}/
+
+To run:
+  # Unix/macOS
+  source .venv/bin/activate
+  
+  # Windows (PowerShell)
+  .\.venv\Scripts\Activate.ps1
+  
+  # Set API key
+  export ANTHROPIC_API_KEY=your-key  # Unix
+  $env:ANTHROPIC_API_KEY="your-key"  # Windows
+  
+  # Run
+  python {agent-path}/claude_agent.py
+
+Or press F5 in VS Code/Cursor (configure Python interpreter first).
+```
+
+---
+
 ## Available Tools
 
 | Tool | Capability |
@@ -543,3 +784,42 @@ if __name__ == "__main__":
 | `Edit` | Modify existing files |
 | `Grep` | Search patterns in files |
 | `Skill` | Execute custom skills |
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| `ModuleNotFoundError: claude_code_sdk` | Package not installed | Run `pip install claude-code-sdk` |
+| `ANTHROPIC_API_KEY not found` | Missing environment variable | Set via `.env` or `export ANTHROPIC_API_KEY=...` |
+| `python3: command not found` | Python not in PATH | Install Python 3.10+ or fix PATH |
+| `venv creation failed` | Missing python3-venv | `sudo apt install python3-venv` (Linux) |
+| Agent timeout | Task too complex | Increase `AGENT_TIMEOUT_SECONDS` or simplify task |
+| Logs directory growing | No cleanup | Set `AGENT_MAX_LOG_FILES` environment variable |
+| Permission denied errors | Restrictive settings.local.json | Add required commands to `allow` list |
+
+### Debugging Tips
+
+1. **Check logs**: Review `logs/{session-id}/agent.log` for detailed execution trace
+2. **Verify API key**: Run `echo $ANTHROPIC_API_KEY | head -c 10` (should show `sk-ant-...`)
+3. **Test SDK**: Run `python -c "from claude_code_sdk import ClaudeCodeClient; print('OK')"`
+4. **Check permissions**: Verify `.claude/settings.local.json` allows required operations
+5. **Inspect output**: Check `logs/{session-id}/output.json` for agent's final result
+
+### Platform-Specific Notes
+
+**macOS/Linux:**
+- Use `source .venv/bin/activate`
+- Set env vars with `export VAR=value`
+
+**Windows:**
+- Use `.\.venv\Scripts\Activate.ps1` (PowerShell) or `.venv\Scripts\activate.bat` (CMD)
+- Set env vars with `$env:VAR="value"` (PowerShell) or `set VAR=value` (CMD)
+- Path separators: use `\` in paths or raw strings
+
+**Docker:**
+- Mount `.env` file: `-v $(pwd)/.env:/app/.env`
+- Set env directly: `-e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY`
