@@ -98,7 +98,8 @@ After creating files:
 │   │   ├── agent.py
 │   │   ├── schemas.py
 │   │   └── exceptions.py
-│   ├── logs/
+│   ├── logs/                       # Execution logs
+│   ├── output/                     # Message history (JSONL)
 │   ├── task.md
 │   └── claude_agent.py
 ```
@@ -137,7 +138,7 @@ ANTHROPIC_API_KEY=your-api-key-here
 ```gitignore
 # Agent logs and output
 logs/
-output.json
+output/
 *.jsonl
 
 # Environment and secrets
@@ -156,10 +157,6 @@ venv/
 .idea/
 *.swp
 *.swo
-
-# Agent artifacts
-fetch_hn_stories.sh
-stories_data.json
 ```
 
 ### .claude/settings.local.json
@@ -322,6 +319,7 @@ class AgentResult(BaseModel):
     data: dict[str, Any] = Field(default_factory=dict)
     metrics: Optional[LLMMetrics] = None
     error: Optional[str] = None
+    message_history: list[dict[str, Any]] = Field(default_factory=list)
 ```
 
 ### src/agent.py
@@ -331,7 +329,8 @@ class AgentResult(BaseModel):
 import asyncio
 import logging
 import os
-from typing import Optional
+import time
+from typing import Any, Optional
 
 from claude_agent_sdk import query
 from claude_agent_sdk.types import (
@@ -360,6 +359,27 @@ CYAN = "\033[96m"
 MAGENTA = "\033[95m"
 RESET = "\033[0m"
 BOLD = "\033[1m"
+
+
+def serialize_block(block: Any) -> dict[str, Any]:
+    """Convert SDK message block to serializable dict."""
+    block_type = getattr(block, 'type', None)
+    if block_type == 'tool_use':
+        return {
+            "type": "tool_use",
+            "name": getattr(block, 'name', ''),
+            "input": getattr(block, 'input', {}),
+        }
+    elif block_type == 'tool_result':
+        content = getattr(block, 'content', '')
+        return {
+            "type": "tool_result",
+            "is_error": getattr(block, 'is_error', False),
+            "content": str(content)[:500] if content else "",
+        }
+    elif block_type == 'text':
+        return {"type": "text", "text": getattr(block, 'text', '')}
+    return {"type": str(block_type), "raw": str(block)[:200]}
 
 
 def print_verbose(prefix: str, content: str, color: str = RESET) -> None:
@@ -396,21 +416,23 @@ async def run_agent_with_timeout(
         session_id = ""
         num_turns = 0
         total_cost = None
+        message_history: list[dict[str, Any]] = []
 
         async def run_query():
             nonlocal result_text, session_id, num_turns, total_cost
             turn_count = 0
 
             async for message in query(prompt=task, options=options):
-                if verbose:
-                    if isinstance(message, AssistantMessage):
-                        turn_count += 1
-                        print_verbose(f"TURN {turn_count}", "", CYAN)
-                        content = getattr(message, 'message', None)
-                        if content:
-                            msg_content = getattr(content, 'content', None)
-                            if msg_content:
-                                for block in msg_content:
+                if isinstance(message, AssistantMessage):
+                    turn_count += 1
+                    content = getattr(message, 'message', None)
+                    serialized_blocks: list[dict[str, Any]] = []
+                    if content:
+                        msg_content = getattr(content, 'content', None)
+                        if msg_content:
+                            for block in msg_content:
+                                serialized_blocks.append(serialize_block(block))
+                                if verbose:
                                     block_type = getattr(block, 'type', None)
                                     if block_type == 'text':
                                         text = getattr(block, 'text', '')
@@ -423,21 +445,30 @@ async def run_agent_with_timeout(
                                         print_verbose("TOOL", f"{tool_name}", YELLOW)
                                         if tool_name == 'Bash' and 'command' in tool_input:
                                             print_verbose("CMD", tool_input['command'][:200], MAGENTA)
+                    message_history.append({
+                        "turn": turn_count,
+                        "role": "assistant",
+                        "timestamp": time.time(),
+                        "content": serialized_blocks,
+                    })
+                    if verbose:
+                        print_verbose(f"TURN {turn_count}", "", CYAN)
 
-                    elif isinstance(message, UserMessage):
-                        content = getattr(message, 'message', None)
-                        if content:
-                            msg_content = getattr(content, 'content', None)
-                            if msg_content:
-                                for block in msg_content:
-                                    block_type = getattr(block, 'type', None)
-                                    if block_type == 'tool_result':
-                                        result_content = getattr(block, 'content', '')
-                                        if isinstance(result_content, str) and result_content:
-                                            preview = result_content[:300] + ("..." if len(result_content) > 300 else "")
-                                            print_verbose("RESULT", preview, BLUE)
+                elif isinstance(message, UserMessage):
+                    content = getattr(message, 'message', None)
+                    if content:
+                        msg_content = getattr(content, 'content', None)
+                        if msg_content and verbose:
+                            for block in msg_content:
+                                block_type = getattr(block, 'type', None)
+                                if block_type == 'tool_result':
+                                    result_content = getattr(block, 'content', '')
+                                    if isinstance(result_content, str) and result_content:
+                                        preview = result_content[:300] + ("..." if len(result_content) > 300 else "")
+                                        print_verbose("RESULT", preview, BLUE)
 
-                    elif isinstance(message, SystemMessage):
+                elif isinstance(message, SystemMessage):
+                    if verbose:
                         print_verbose("SYSTEM", str(message)[:200], CYAN)
 
                 if isinstance(message, ResultMessage):
@@ -464,6 +495,7 @@ async def run_agent_with_timeout(
             summary="Task completed successfully",
             details=result_text,
             metrics=metrics,
+            message_history=message_history,
         )
 
     except asyncio.TimeoutError:
@@ -490,6 +522,7 @@ Usage:
     python claude_agent.py                    # Run with default task.md
     python claude_agent.py --task-file x.md   # Custom task file
     python claude_agent.py --output out.json  # Save output to file
+    python claude_agent.py -v                 # Verbose output
 
 Prerequisites:
     pip install -r requirements.txt
@@ -497,24 +530,29 @@ Prerequisites:
 """
 import argparse
 import asyncio
+import json
 import logging
-import os
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import colorlog
 from dotenv import load_dotenv
 
 from src.agent import run_agent_with_timeout
-from src.schemas import TaskStatus
+from src.schemas import AgentResult, TaskStatus
 
 # Load environment variables from .env file
 load_dotenv()
 
 
-def setup_logging() -> logging.Logger:
-    handler = colorlog.StreamHandler()
-    handler.setFormatter(colorlog.ColoredFormatter(
+def setup_logging(logs_dir: Path) -> logging.Logger:
+    """Configure logging with console and file handlers."""
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
+    # Console handler with colors
+    console_handler = colorlog.StreamHandler()
+    console_handler.setFormatter(colorlog.ColoredFormatter(
         "%(log_color)s%(asctime)s [%(levelname)s]%(reset)s %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
         log_colors={
@@ -525,8 +563,18 @@ def setup_logging() -> logging.Logger:
             "CRITICAL": "red,bg_white",
         },
     ))
+
+    # File handler for persistent logs
+    log_file = logs_dir / f"agent_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    file_handler = logging.FileHandler(log_file, encoding="utf-8")
+    file_handler.setFormatter(logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    ))
+
     logger = colorlog.getLogger(__name__)
-    logger.addHandler(handler)
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
     logger.setLevel(logging.INFO)
     return logger
 
@@ -537,8 +585,28 @@ def load_task_file(task_file: Path) -> str:
     return task_file.read_text(encoding="utf-8")
 
 
+def save_message_history(
+    result: AgentResult,
+    output_dir: Path,
+    session_id: str,
+    logger: logging.Logger,
+) -> None:
+    """Save message history to JSONL file."""
+    if not result.message_history:
+        return
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_file = output_dir / f"session_{session_id}.jsonl"
+    with output_file.open("w", encoding="utf-8") as f:
+        for msg in result.message_history:
+            f.write(json.dumps(msg) + "\n")
+    logger.info(f"Message history saved to: {output_file}")
+
+
 def main() -> int:
-    logger = setup_logging()
+    base_dir = Path(__file__).parent
+    logs_dir = base_dir / "logs"
+    output_dir = base_dir / "output"
+    logger = setup_logging(logs_dir)
 
     parser = argparse.ArgumentParser(description="Execute Claude agent task")
     parser.add_argument(
@@ -562,7 +630,15 @@ def main() -> int:
         default=[],
         help="Additional directories",
     )
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Enable verbose output",
+    )
     args = parser.parse_args()
+
+    if args.verbose:
+        logger.setLevel(logging.DEBUG)
 
     try:
         task: str = load_task_file(args.task_file)
@@ -579,15 +655,28 @@ def main() -> int:
                 task=task,
                 working_dir=args.dir,
                 additional_dirs=args.add_dir,
+                verbose=args.verbose,
             )
         )
-        output: str = result.model_dump_json(indent=2)
+
+        # Save message history to JSONL
+        session_id = (
+            result.metrics.session_id
+            if result.metrics
+            else datetime.now().strftime("%Y%m%d_%H%M%S")
+        )
+        save_message_history(result, output_dir, session_id, logger)
+
+        # Output result JSON (excluding message_history to avoid duplication)
+        output_json: str = result.model_dump_json(
+            indent=2, exclude={"message_history"}
+        )
 
         if args.output:
-            Path(args.output).write_text(output, encoding="utf-8")
+            Path(args.output).write_text(output_json, encoding="utf-8")
             logger.info(f"Result saved to: {args.output}")
         else:
-            print(output)
+            print(output_json)
 
         if result.metrics:
             logger.info(
@@ -716,11 +805,11 @@ curl -s https://api.anthropic.com/v1/messages \
 
 ### Debugging Tips
 
-1. **Check logs**: Review `logs/{session-id}/agent.log` for detailed execution trace
+1. **Check logs**: Review `logs/agent_{timestamp}.log` for detailed execution trace
 2. **Verify API key**: Run `echo $ANTHROPIC_API_KEY | head -c 15` (should show `sk-ant-api...`)
 3. **Test SDK**: Run `python -c "from claude_agent_sdk import query; print('OK')"`
 4. **Check permissions**: Verify `.claude/settings.local.json` allows required operations
-5. **Inspect output**: Check `logs/{session-id}/output.json` for agent's final result
+5. **Inspect message history**: Check `output/session_{session_id}.jsonl` for full conversation trace
 6. **Test CLI**: Run `claude -p "hello"` to verify Claude CLI works
 
 ### Platform-Specific Notes

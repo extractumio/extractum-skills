@@ -325,5 +325,3 @@ echo "  3. git push -u origin main"
 echo ""
 
 exit 0
-
-

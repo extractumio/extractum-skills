@@ -394,5 +394,3 @@ By contributing, you agree that your contributions will be licensed under the MI
 Thank you for contributing to the Claude Code Skills Library! 🎉
 
 Your contributions help the entire community build better AI-assisted development workflows.
-
-

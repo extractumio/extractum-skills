@@ -131,5 +131,3 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 **Maintained by**: [Extractum](https://extractum.io)  
 **Contact**: For enterprise support and custom skill development - reach out ot us, info@extractum.io
-
-
