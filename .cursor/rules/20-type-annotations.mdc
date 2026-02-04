@@ -1,0 +1,119 @@
+---
+description: "Python type annotation standards"
+globs:
+  - "**/*.py"
+alwaysApply: false
+priority: 15
+---
+
+# Type Annotations
+
+## General Rules
+
+- **All functions** must have explicit parameter types and return types
+- **All variables** should have type annotations when not obvious from assignment
+- Use `TypedDict` for structured dictionaries
+- Use union types with `|` syntax (Python 3.10+)
+
+---
+
+## Function Signatures
+
+```python
+# ✅ Good - Fully typed
+def setup_logging() -> logging.Logger:
+    """Configure logging."""
+    ...
+
+async def run_agent(prompt: str, logger: logging.Logger) -> AgentResultSummary:
+    """Run the agent with given prompt."""
+    ...
+
+def _format_result(message: ResultMessage) -> str:
+    """Format result message."""
+    ...
+
+# ❌ Bad - Missing types
+def setup_logging():
+    ...
+
+def run_agent(prompt, logger):
+    ...
+```
+
+---
+
+## Variable Annotations
+
+```python
+# ✅ Good - Explicit types
+logs_dir: Path = Path(__file__).parent / LOGS_DIR_NAME
+timestamp: str = datetime.now().strftime(LOG_TIMESTAMP_FORMAT)
+api_key: str | None = os.getenv(ENV_API_KEY)
+texts: list[str] = []
+
+# ❌ Bad - No types
+logs_dir = Path(__file__).parent / "logs"
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+```
+
+---
+
+## TypedDict for Structured Data
+
+Use `TypedDict` instead of plain `dict[str, Any]` for known structures:
+
+```python
+# ✅ Good - TypedDict
+class AgentResultSummary(TypedDict, total=False):
+    """Type definition for agent execution result."""
+    prompt: str
+    messages: list[dict[str, Any]]
+    total_cost_usd: float
+    num_turns: int
+    success: bool
+    session_id: str
+    error: str
+
+def run_agent() -> AgentResultSummary:
+    ...
+
+# ❌ Bad - Plain dict
+def run_agent() -> dict[str, Any]:
+    ...
+```
+
+---
+
+## Union Types
+
+Use the modern `|` syntax for optional and union types:
+
+```python
+# ✅ Good - Modern syntax
+api_key: str | None = os.getenv(ENV_API_KEY)
+value: int | float = get_number()
+
+# ❌ Bad - Old syntax
+from typing import Optional, Union
+api_key: Optional[str] = os.getenv(ENV_API_KEY)
+value: Union[int, float] = get_number()
+```
+
+---
+
+## Generic Collections
+
+Use lowercase generic types (Python 3.9+):
+
+```python
+# ✅ Good - Lowercase generics
+messages: list[str] = []
+config: dict[str, Any] = {}
+handlers: tuple[Handler, ...] = ()
+
+# ❌ Bad - Capitalized (deprecated)
+from typing import List, Dict, Tuple
+messages: List[str] = []
+config: Dict[str, Any] = {}
+```

@@ -402,13 +402,15 @@ async def run_agent_with_timeout(
 
     logger.info(f"Starting agent with model={model}, max_turns={max_turns}")
 
+    # add_dirs grants the agent read/write access to directories outside cwd.
+    # Use this when the agent needs to access external resources, configs, or data.
     options = ClaudeAgentOptions(
         model=model,
         cwd=working_dir,
         permission_mode=permission_mode,
         max_turns=max_turns,
         max_budget_usd=max_budget,
-        add_dirs=additional_dirs or [],
+        add_dirs=additional_dirs or [],  # Additional allowed directories
     )
 
     try:
@@ -764,6 +766,17 @@ Environment variables for customization:
 **Valid model aliases:**
 - `claude-sonnet-4-5` - Fast, capable (recommended)
 - `claude-opus-4` - Most capable
+
+**SDK Options (`ClaudeAgentOptions`):**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `cwd` | `str` | Working directory for the agent |
+| `add_dirs` | `list[str]` | **Additional directories the agent can access** (read/write). Use when agent needs files outside `cwd` — e.g., shared configs, data directories, or external resources |
+| `model` | `str` | Model alias |
+| `permission_mode` | `str` | Permission mode (see above) |
+| `max_turns` | `int` | Maximum conversation turns |
+| `max_budget_usd` | `float` | Maximum API cost |
 
 ---
 

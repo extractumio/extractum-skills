@@ -16,8 +16,7 @@ This repository contains reusable skills that extend Claude Code's capabilities.
 SKILLS/
 ├── general-purpose/       # Universal skills applicable to any project
 │   └── create-claude-agent/
-├── domain-specific/       # Specialized skills for specific domains
-└── extractum-private/     # Private/proprietary skills (not included)
+└── domain-specific/       # Specialized skills for specific domains
 ```
 
 ## Available Skills
@@ -131,3 +130,8 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 **Maintained by**: [Extractum](https://extractum.io)  
 **Contact**: For enterprise support and custom skill development - reach out ot us, info@extractum.io
+
+
+
+
+

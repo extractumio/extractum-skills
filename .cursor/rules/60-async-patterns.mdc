@@ -1,0 +1,100 @@
+---
+description: "Async/await patterns for Claude Agent SDK"
+globs:
+  - "**/*.py"
+alwaysApply: false
+priority: 5
+---
+
+# Async/Await Patterns
+
+## Main Entry Point
+
+Use `asyncio.run()` for the main entry point:
+
+```python
+async def main() -> None:
+    """Main entry point for the agent script."""
+    logger: logging.Logger = setup_logging()
+
+    try:
+        result: AgentResultSummary = await run_agent(DEFAULT_PROMPT, logger)
+        log_execution_summary(result, logger)
+
+    except Exception as e:
+        logger.error(f"Failed to run agent: {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+---
+
+## Async Generator Processing
+
+Process async generators with `async for`:
+
+```python
+async def run_agent(prompt: str, logger: logging.Logger) -> AgentResultSummary:
+    """Run the Claude agent with the given prompt."""
+    options: ClaudeAgentOptions = _create_agent_options()
+    result_summary: AgentResultSummary = _create_empty_result(prompt)
+
+    async for message in query(prompt=prompt, options=options):
+        text_content: str = extract_text_from_message(message)
+        
+        if isinstance(message, AssistantMessage):
+            _process_assistant_message(message, text_content, result_summary, logger)
+        elif isinstance(message, ResultMessage):
+            _process_result_message(message, text_content, result_summary, logger)
+
+    return result_summary
+```
+
+---
+
+## Type Hints for Async
+
+Always include proper return type hints for async functions:
+
+```python
+# ✅ Good - Explicit async return type
+async def run_agent(prompt: str, logger: logging.Logger) -> AgentResultSummary:
+    ...
+
+async def main() -> None:
+    ...
+
+# The return type is the actual value, not a coroutine
+# Python handles the coroutine wrapping automatically
+```
+
+---
+
+## Claude Agent SDK Query Pattern
+
+The `query()` function is an async generator that yields messages:
+
+```python
+from claude_agent_sdk import (
+    ClaudeAgentOptions,
+    Message,
+    AssistantMessage,
+    ResultMessage,
+    SystemMessage,
+    query,
+)
+
+async for message in query(prompt=prompt, options=options):
+    if isinstance(message, AssistantMessage):
+        # Handle assistant response
+        pass
+    elif isinstance(message, ResultMessage):
+        # Handle final result with cost/usage info
+        pass
+    elif isinstance(message, SystemMessage):
+        # Handle system messages
+        pass
+```

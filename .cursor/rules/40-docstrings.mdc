@@ -1,0 +1,100 @@
+---
+description: "Docstring and documentation standards"
+globs:
+  - "**/*.py"
+alwaysApply: false
+priority: 5
+---
+
+# Docstring Standards
+
+## Module Docstrings
+
+Every Python file must have a module-level docstring:
+
+```python
+"""
+Claude Code Agent SDK - RAG Agent Script.
+
+This script demonstrates how to use the Claude Agent SDK to run an AI agent
+that can interact with files and execute commands.
+"""
+```
+
+---
+
+## Function Docstrings
+
+Use Google-style docstrings for functions:
+
+### Simple Functions
+
+```python
+def _log_separator(logger: logging.Logger) -> None:
+    """Log a separator line."""
+    logger.info(SEPARATOR_CHAR * SEPARATOR_LENGTH)
+```
+
+### Functions with Arguments
+
+```python
+async def run_agent(prompt: str, logger: logging.Logger) -> AgentResultSummary:
+    """
+    Run the Claude agent with the given prompt.
+
+    Args:
+        prompt: The prompt/command for the agent to execute.
+        logger: Logger instance for output.
+
+    Returns:
+        Dictionary containing the result summary.
+
+    Raises:
+        ValueError: If ANTHROPIC_API_KEY is not set.
+        Exception: If agent execution fails.
+    """
+```
+
+---
+
+## Class and TypedDict Docstrings
+
+```python
+class AgentResultSummary(TypedDict, total=False):
+    """Type definition for agent execution result summary."""
+    
+    prompt: str
+    messages: list[dict[str, Any]]
+    total_cost_usd: float
+    num_turns: int
+    success: bool
+```
+
+---
+
+## Private Function Docstrings
+
+Even private functions (prefixed with `_`) should have docstrings:
+
+```python
+def _validate_api_key() -> None:
+    """Validate that the API key is available in environment."""
+    ...
+
+def _create_agent_options() -> ClaudeAgentOptions:
+    """Create and return agent options with default configuration."""
+    ...
+
+def _format_tool_use(block: ToolUseBlock) -> str:
+    """Format a tool use block as a readable string."""
+    ...
+```
+
+---
+
+## Docstring Formatting
+
+- Use period at the end of single-line docstrings
+- Use blank line after the summary in multi-line docstrings
+- Keep lines under 80 characters when possible
+- Use imperative mood ("Create...", "Return...", "Validate...")

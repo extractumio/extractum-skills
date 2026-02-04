@@ -1,0 +1,48 @@
+---
+description: "Project overview and core development standards"
+alwaysApply: true
+priority: 10
+---
+
+# Project Overview
+
+This is a Claude Agent SDK RAG (Retrieval Augmented Generation) project.
+
+## Core Principles
+
+- **DRY (Don't Repeat Yourself)**: Extract repeated code into reusable functions
+- **Single Responsibility**: Each function should do one thing well
+- **Explicit over Implicit**: Prefer clear, explicit code over magic
+- **Type Safety**: Always use type annotations
+
+---
+
+## Project Structure
+
+```
+in_file_rag/
+├── .cursor/rules/       # Cursor AI rules
+├── .vscode/             # VS Code/Cursor configuration
+├── data/knowledge_base/ # Knowledge base data
+├── logs/                # Agent execution logs
+├── venv/                # Python virtual environment
+├── .env                 # Environment variables (API keys)
+└── agent_rag.py         # Main agent script
+```
+
+---
+
+## Environment
+
+- Python 3.13+
+- Virtual environment in `venv/`
+- Dependencies managed via pip
+- API keys stored in `.env` file
+
+---
+
+## Key Libraries
+
+- `claude-agent-sdk`: Claude Code Agent SDK (v0.1.18)
+- `python-dotenv`: Environment variable loading
+- `pydantic`: Data validation and settings

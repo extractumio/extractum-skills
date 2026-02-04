@@ -1,0 +1,149 @@
+---
+description: "Error handling and validation patterns"
+globs:
+  - "**/*.py"
+alwaysApply: false
+priority: 5
+---
+
+# Error Handling Standards
+
+## Fail Fast Principle
+
+**Never suppress errors.** Errors must be raised immediately to prevent silent failures.
+
+### Rules
+
+1. **Always re-raise** after logging — never swallow exceptions
+2. **Validate early** — check inputs at function entry, not deep in logic
+3. **No bare except** — always specify exception types or use `Exception`
+4. **No pass in except** — always handle, log, or re-raise
+
+```python
+# ✅ Good - Fail fast, log and re-raise
+try:
+    result = await some_operation()
+except Exception as e:
+    logger.error(f"Operation failed: {e}", exc_info=True)
+    raise  # Always re-raise!
+
+# ❌ Bad - Suppressed error (NEVER DO THIS)
+try:
+    result = await some_operation()
+except Exception:
+    pass  # Silent failure - bugs will be hidden!
+
+# ❌ Bad - Logged but not raised
+try:
+    result = await some_operation()
+except Exception as e:
+    logger.error(f"Failed: {e}")  # Error is lost, caller doesn't know!
+    return None
+```
+
+### Early Validation Pattern
+
+```python
+async def run_agent(prompt: str, logger: logging.Logger) -> AgentResultSummary:
+    """Run agent - validates inputs immediately."""
+    # Fail fast: validate at entry point
+    load_dotenv()
+    _validate_api_key()      # Raises immediately if missing
+    _validate_prompt(prompt)  # Raises immediately if invalid
+    
+    # Only proceed if all validations pass
+    options: ClaudeAgentOptions = _create_agent_options()
+    ...
+```
+
+---
+
+## Error Message Constants
+
+Define error messages as multiline string constants:
+
+```python
+ERROR_API_KEY_MISSING: str = """
+ANTHROPIC_API_KEY not found in environment variables.
+Please ensure it is set in your .env file.
+"""
+
+ERROR_INVALID_PROMPT: str = """
+Prompt cannot be empty.
+Please provide a valid prompt for the agent.
+"""
+```
+
+---
+
+## Validation Functions
+
+Extract validation logic into dedicated functions:
+
+```python
+def _validate_api_key() -> None:
+    """Validate that the API key is available in environment."""
+    api_key: str | None = os.getenv(ENV_API_KEY)
+    if not api_key:
+        raise ValueError(ERROR_API_KEY_MISSING.strip())
+
+
+def _validate_prompt(prompt: str) -> None:
+    """Validate that the prompt is not empty."""
+    if not prompt or not prompt.strip():
+        raise ValueError(ERROR_INVALID_PROMPT.strip())
+```
+
+---
+
+## Exception Handling Pattern
+
+Use try/except with proper logging:
+
+```python
+try:
+    async for message in query(prompt=prompt, options=options):
+        # Process messages...
+        pass
+
+except Exception as e:
+    logger.error(f"Agent execution failed: {e}", exc_info=True)
+    result_summary["error"] = str(e)
+    raise
+```
+
+---
+
+## Graceful Degradation
+
+Handle optional values with sensible defaults:
+
+```python
+# ✅ Good - Handle None with default
+result_summary["total_cost_usd"] = message.total_cost_usd or 0.0
+
+# ✅ Good - Use .get() for optional keys
+if result.get("session_id"):
+    logger.info(f"Session ID: {result['session_id']}")
+```
+
+---
+
+## Exit Codes
+
+Use proper exit codes for script termination:
+
+```python
+import sys
+
+# Success
+sys.exit(0)
+
+# General error
+sys.exit(1)
+
+# Specific error codes (optional)
+EXIT_SUCCESS: int = 0
+EXIT_ERROR: int = 1
+EXIT_INVALID_ARGS: int = 2
+```

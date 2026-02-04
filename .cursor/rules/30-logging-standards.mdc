@@ -1,0 +1,127 @@
+---
+description: "Logging configuration and usage standards"
+globs:
+  - "**/*.py"
+alwaysApply: false
+priority: 10
+---
+
+# Logging Standards
+
+## Colored Console Output
+
+Use `colorlog` for colored console output to improve readability:
+
+```python
+import colorlog
+
+# Color configuration by log level
+LOG_COLORS: dict[str, str] = {
+    "DEBUG": "cyan",
+    "INFO": "green",
+    "WARNING": "yellow",
+    "ERROR": "red",
+    "CRITICAL": "red,bg_white",
+}
+
+# Console format with color placeholders
+LOG_FORMAT_CONSOLE: str = "%(log_color)s%(levelname)s%(reset)s: %(message)s"
+```
+
+---
+
+## Logger Configuration
+
+Use a centralized logging setup with both file and console handlers:
+
+```python
+LOGGER_NAME: str = "claude_agent"
+LOG_ENCODING: str = "utf-8"
+LOG_DATE_FORMAT: str = "%Y-%m-%d %H:%M:%S"
+LOG_FORMAT_FILE: str = "%(asctime)s - %(levelname)s - %(message)s"
+LOG_FORMAT_CONSOLE: str = "%(log_color)s%(levelname)s%(reset)s: %(message)s"
+```
+
+---
+
+## Handler Factory Functions
+
+Extract handler creation into reusable functions:
+
+```python
+def _create_file_handler(log_file: Path) -> logging.FileHandler:
+    """Create and configure file handler for logging."""
+    handler: logging.FileHandler = logging.FileHandler(
+        log_file, encoding=LOG_ENCODING
+    )
+    handler.setLevel(logging.DEBUG)
+    handler.setFormatter(
+        logging.Formatter(LOG_FORMAT_FILE, datefmt=LOG_DATE_FORMAT)
+    )
+    return handler
+
+
+def _create_console_handler() -> logging.StreamHandler:
+    """Create and configure colored console handler for logging."""
+    handler: logging.StreamHandler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(
+        colorlog.ColoredFormatter(LOG_FORMAT_CONSOLE, log_colors=LOG_COLORS)
+    )
+    return handler
+```
+
+---
+
+## Log Levels
+
+Use appropriate log levels:
+
+| Level | Use Case |
+|-------|----------|
+| `DEBUG` | Detailed diagnostic info, internal state |
+| `INFO` | General operational messages, progress |
+| `WARNING` | Unexpected but handled situations |
+| `ERROR` | Errors that prevent normal operation |
+| `CRITICAL` | System-wide failures |
+
+```python
+logger.debug(f"Working directory: {os.getcwd()}")
+logger.info(f"Starting agent with prompt: {prompt[:100]}...")
+logger.warning(f"Retrying after failure: {error}")
+logger.error(f"Agent execution failed: {e}", exc_info=True)
+```
+
+---
+
+## Log File Naming
+
+Use timestamped log files for traceability:
+
+```python
+LOGS_DIR_NAME: str = "logs"
+LOG_FILE_PREFIX: str = "agent_"
+LOG_TIMESTAMP_FORMAT: str = "%Y%m%d_%H%M%S"
+
+# Creates: logs/agent_20251223_213800.log
+timestamp: str = datetime.now().strftime(LOG_TIMESTAMP_FORMAT)
+log_file: Path = logs_dir / f"{LOG_FILE_PREFIX}{timestamp}.log"
+```
+
+---
+
+## Preview Truncation
+
+Truncate long content in logs with constants:
+
+```python
+LOG_PREVIEW_LENGTH: int = 200
+PROMPT_PREVIEW_LENGTH: int = 100
+
+# ✅ Good - Uses constants
+logger.info(f"Assistant: {text_content[:LOG_PREVIEW_LENGTH]}...")
+logger.info(f"Prompt: {prompt[:PROMPT_PREVIEW_LENGTH]}...")
+
+# ❌ Bad - Magic numbers
+logger.info(f"Assistant: {text_content[:200]}...")
+```

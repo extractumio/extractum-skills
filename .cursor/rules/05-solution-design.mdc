@@ -1,0 +1,143 @@
+---
+description: "Solution design principles and decision-making guidelines"
+alwaysApply: true
+priority: 15
+---
+
+# Solution Design Principles
+
+## Ask Before Implementing Equivalent Options
+
+When multiple equivalent solutions exist, **ask the user for their preference** before implementing.
+
+### When to Ask
+
+- Two or more approaches achieve the same goal with similar trade-offs
+- Architectural decisions that affect project structure
+- Naming conventions when multiple valid options exist
+- Library/framework choices when alternatives are comparable
+- Configuration approaches (env vars vs config file vs CLI args)
+
+### Examples
+
+```markdown
+# ✅ Good - Ask for preference
+
+"I see two equivalent approaches for storing configuration:
+1. **Environment variables** - simpler, 12-factor app compliant
+2. **Config file (YAML/JSON)** - more structured, easier to version
+
+Which approach do you prefer for this project?"
+
+# ❌ Bad - Assume without asking
+
+*Silently implements YAML config without discussing alternatives*
+```
+
+### Decision Framework
+
+Before implementing, consider:
+
+1. **Is there a clear best practice?** → Follow it without asking
+2. **Are options equivalent?** → Ask user for preference
+3. **Does project have existing patterns?** → Follow existing conventions
+4. **Is it easily reversible?** → Can implement and offer to change later
+
+---
+
+## Intelligent Design Choices
+
+### Analyze Before Coding
+
+1. **Understand the problem** fully before proposing solutions
+2. **Consider edge cases** and error scenarios upfront
+3. **Evaluate trade-offs** between simplicity and flexibility
+4. **Check existing patterns** in the codebase first
+
+### Prefer Existing Patterns
+
+```python
+# ✅ Good - Follow existing project patterns
+# If project uses TypedDict for structured data, continue using it
+class NewResultType(TypedDict):
+    ...
+
+# ❌ Bad - Introduce new pattern without reason
+# Don't switch to dataclass if project uses TypedDict
+@dataclass
+class NewResultType:
+    ...
+```
+
+---
+
+## Communicate Trade-offs
+
+When presenting options, clearly explain:
+
+1. **Pros and cons** of each approach
+2. **Complexity implications** (maintenance, testing, debugging)
+3. **Performance considerations** if relevant
+4. **Future extensibility** impact
+
+### Example Communication
+
+```markdown
+"For the logging output, I can implement:
+
+**Option A: Timestamped files** (`agent_20251223_213800.log`)
+- ✅ Easy to find specific runs
+- ✅ No file size issues
+- ❌ Many files to manage
+
+**Option B: Single rotating file** (`agent.log` with rotation)
+- ✅ Fewer files
+- ✅ Automatic cleanup
+- ❌ Harder to find specific runs
+
+Which approach fits your workflow better?"
+```
+
+---
+
+## Don't Over-Engineer
+
+### Keep It Simple
+
+- Implement what's needed now, not hypothetical future needs
+- Avoid adding configuration for things that won't change
+- Don't create abstractions for single-use code
+
+```python
+# ✅ Good - Simple and direct
+DEFAULT_MAX_TURNS: int = 50
+
+# ❌ Bad - Over-engineered for no reason
+class ConfigManager:
+    _instance = None
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+    
+    def get_max_turns(self) -> int:
+        return self._load_from_env_or_file_or_default()
+```
+
+---
+
+## Reversibility Principle
+
+When uncertain, prefer decisions that are:
+
+1. **Easy to change** later without major refactoring
+2. **Well-documented** so future changes are informed
+3. **Isolated** to minimize ripple effects
+
+```python
+# ✅ Good - Easy to change later
+PERMISSION_MODE: str = "acceptEdits"  # Can easily change this constant
+
+# ❌ Bad - Hard-coded throughout
+options = ClaudeAgentOptions(permission_mode="acceptEdits")  # In 10 places
+```

@@ -1,0 +1,138 @@
+---
+description: "Python coding standards and best practices"
+globs:
+  - "**/*.py"
+alwaysApply: false
+priority: 20
+---
+
+# Python Coding Standards
+
+## Imports Organization
+
+All imports must be at the **beginning of the file**, never inline.
+
+### Import Order
+
+1. Standard library imports
+2. Third-party imports
+3. Local application imports
+
+Separate each group with a blank line.
+
+```python
+# Standard library
+import asyncio
+import logging
+import os
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Any, TypedDict
+
+# Third-party
+from dotenv import load_dotenv
+
+# Local application
+from claude_agent_sdk import ClaudeAgentOptions, query
+```
+
+---
+
+## Constants
+
+### Numerical Values
+
+Define constants for all magic numbers:
+
+```python
+# ✅ Good
+DEFAULT_MAX_TURNS: int = 50
+DEFAULT_MAX_BUDGET_USD: float = 1.0
+LOG_PREVIEW_LENGTH: int = 200
+
+# ❌ Bad
+options = ClaudeAgentOptions(max_turns=50, max_budget_usd=1.0)
+```
+
+### String Values
+
+Define constants for repeated strings. Use multiline `"""..."""` for long strings:
+
+```python
+# ✅ Good
+ENV_API_KEY: str = "ANTHROPIC_API_KEY"
+LOGGER_NAME: str = "claude_agent"
+
+ERROR_API_KEY_MISSING: str = """
+ANTHROPIC_API_KEY not found in environment variables.
+Please ensure it is set in your .env file.
+"""
+
+# ❌ Bad
+api_key = os.getenv("ANTHROPIC_API_KEY")
+raise ValueError("ANTHROPIC_API_KEY not found...")
+```
+
+---
+
+## Constants Naming
+
+Use SCREAMING_SNAKE_CASE for constants:
+
+```python
+# Configuration
+DEFAULT_MAX_TURNS: int = 50
+LOG_ENCODING: str = "utf-8"
+
+# Paths and directories
+LOGS_DIR_NAME: str = "logs"
+LOG_FILE_PREFIX: str = "agent_"
+
+# Format strings
+LOG_DATE_FORMAT: str = "%Y-%m-%d %H:%M:%S"
+```
+
+---
+
+## Code Organization
+
+Organize code into logical sections with separator comments:
+
+```python
+# =============================================================================
+# Constants
+# =============================================================================
+
+# ... constants here ...
+
+# =============================================================================
+# Type Definitions
+# =============================================================================
+
+# ... types here ...
+
+# =============================================================================
+# Main Functions
+# =============================================================================
+
+# ... functions here ...
+```
+
+---
+
+## Function Extraction
+
+Extract repeated logic into helper functions (prefix private helpers with `_`):
+
+```python
+# ✅ Good - Extracted helper
+def _log_separator(logger: logging.Logger) -> None:
+    """Log a separator line."""
+    logger.info(SEPARATOR_CHAR * SEPARATOR_LENGTH)
+
+# ❌ Bad - Repeated inline
+logger.info("=" * 50)
+logger.info("SUMMARY")
+logger.info("=" * 50)
+```
