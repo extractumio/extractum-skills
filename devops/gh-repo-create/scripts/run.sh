@@ -96,20 +96,25 @@ read -p "Enter repository description (optional): " REPO_DESC
 
 print_info "Creating GitHub repository..."
 
-# Create repository
-if [[ -n "$REPO_DESC" ]]; then
-    if gh repo create "$REPO_NAME" "--$VISIBILITY" --description "$REPO_DESC" --source=. --remote=origin 2>&1; then
-        print_success "Repository created with description"
-    else
-        print_error "Failed to create repository"
-        exit 1
-    fi
+# Check if repository already exists
+if gh repo view "$GH_USERNAME/$REPO_NAME" &> /dev/null; then
+    print_info "Repository already exists, using existing repository"
 else
-    if gh repo create "$REPO_NAME" "--$VISIBILITY" --source=. --remote=origin 2>&1; then
-        print_success "Repository created"
+    # Create repository
+    if [[ -n "$REPO_DESC" ]]; then
+        if gh repo create "$REPO_NAME" "--$VISIBILITY" --description "$REPO_DESC" --source=. --remote=origin 2>&1; then
+            print_success "Repository created with description"
+        else
+            print_error "Failed to create repository"
+            exit 1
+        fi
     else
-        print_error "Failed to create repository"
-        exit 1
+        if gh repo create "$REPO_NAME" "--$VISIBILITY" --source=. --remote=origin 2>&1; then
+            print_success "Repository created"
+        else
+            print_error "Failed to create repository"
+            exit 1
+        fi
     fi
 fi
 
