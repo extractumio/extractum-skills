@@ -32,6 +32,7 @@ _SCRIPTS_DIR = _PLUGIN_ROOT / "scripts"
 
 import patterns as P        # noqa: E402
 import alert as A           # noqa: E402
+import access_log as AL     # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -455,6 +456,19 @@ def main() -> int:
     session_id = payload.get("session_id")
 
     severity, event, summary, findings = evaluate(tool_name, tool_input)
+
+    # Audit log: "allow" reads/writes of a §2 path (e.g. Read ~/.ssh/id_rsa.pub,
+    # Edit on ~/.zshrc) would otherwise leave no trace because raise_alert only
+    # fires on block/warn. Only log here when the call was allowed through — a
+    # block/warn will already get a richer record via raise_alert below.
+    if severity == "ok":
+        try:
+            AL.log_if_sensitive(
+                tool_name=tool_name, tool_input=tool_input,
+                session_id=session_id, phase="pre", decision="allow",
+            )
+        except Exception:
+            pass
 
     if severity == "block":
         A.raise_alert(

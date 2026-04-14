@@ -48,8 +48,14 @@ dependencies.
 
 ### Option A — local plugin dir (fastest)
 
+From a clone of this repo:
+
 ```bash
-claude --plugin-dir ~/EXTRACTUM/SKILLS/plugins/harden-macos-claude
+# from the repo root:
+claude --plugin-dir "$(pwd)/plugins/harden-macos-claude"
+
+# or, if you've already cd'd into the plugin dir:
+claude --plugin-dir "$PWD"
 ```
 
 That's it. Hooks are wired automatically via `hooks/hooks.json`.
@@ -66,7 +72,11 @@ Claude Code plugins cannot merge into the user's global `CLAUDE.md`, so the
 plugin ships an installer that manages its charter inside a delimited block:
 
 ```bash
-~/EXTRACTUM/SKILLS/plugins/harden-macos-claude/install.sh
+# from the plugin directory:
+./install.sh
+
+# or from the repo root:
+./plugins/harden-macos-claude/install.sh
 ```
 
 What it does:
@@ -92,9 +102,26 @@ If you must run it through Claude, first set the unlock marker (see
 ### Verify
 
 ```bash
-/usr/bin/python3 ~/EXTRACTUM/SKILLS/plugins/harden-macos-claude/scripts/tests/run_tests.py
+# from the plugin directory:
+/usr/bin/python3 ./scripts/tests/run_tests.py
 # → Passed: 54
 ```
+
+### Uninstall
+
+```bash
+# from the plugin directory:
+./uninstall.sh           # interactive
+./uninstall.sh --yes     # non-interactive
+
+# then stop passing --plugin-dir, or:
+claude plugin remove harden-macos-claude
+```
+
+The uninstaller strips the managed charter block from `~/.claude/CLAUDE.md`
+(anything you added outside the markers is preserved), removes the session
+unlock marker, and writes a timestamped backup. It leaves
+`~/.claude/security.log` in place as your audit trail.
 
 ---
 
@@ -151,9 +178,12 @@ harden-macos-claude/
 │   ├── posttool_guard.py             # post-execution scan + additionalContext
 │   ├── patterns.py                   # regex library + allowlist loader
 │   ├── alert.py                      # macOS notify/modal/log/say
+│   ├── access_log.py                 # sensitive-source access logger
 │   ├── allowlist.txt                 # trusted hosts
-│   └── tests/run_tests.py            # 54-case regression suite
-├── CLAUDE.md                         # charter (copy into ~/.claude/CLAUDE.md)
+│   └── tests/run_tests.py            # regression suite
+├── CLAUDE.md                         # charter (merged into ~/.claude/CLAUDE.md)
+├── install.sh                        # idempotent charter installer
+├── uninstall.sh                      # charter + marker remover
 └── README.md                         # this file
 ```
 

@@ -57,4 +57,3 @@ quay.io
 # Common data APIs
 api.stripe.com
 api.openweathermap.org
-httpbin.org
