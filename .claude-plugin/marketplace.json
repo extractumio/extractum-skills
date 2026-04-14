@@ -1,0 +1,20 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "extractum-skills",
+  "description": "Extractum's collection of Claude Code plugins, skills, and agents.",
+  "owner": {
+    "name": "Greg Z.",
+    "email": "info@extractum.io",
+    "url": "https://www.linkedin.com/in/gregzem/"
+  },
+  "plugins": [
+    {
+      "name": "harden-macos-claude",
+      "description": "macOS security hardening for Claude Code — PreToolUse/PostToolUse hooks that block secret exfiltration, prompt injection, persistence, and self-tampering.",
+      "category": "security",
+      "source": "./plugins/harden-macos-claude",
+      "homepage": "https://github.com/extractumio/extractum-skills/tree/main/plugins/harden-macos-claude",
+      "license": "MIT"
+    }
+  ]
+}
