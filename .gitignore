@@ -1,6 +1,9 @@
 # Private/Proprietary Content
 extractum-private/
 
+# Per-user Claude Code settings (don't commit personal permissions/state)
+.claude/settings.local.json
+
 # OS Files
 .DS_Store
 .DS_Store?

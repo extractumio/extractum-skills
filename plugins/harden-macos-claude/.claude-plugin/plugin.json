@@ -1,0 +1,12 @@
+{
+  "name": "harden-macos-claude",
+  "version": "1.0.0",
+  "description": "macOS security hardening for Claude Code — PreToolUse/PostToolUse hooks that block secret exfiltration, prompt injection, persistence, and self-tampering.",
+  "author": {
+    "name": "Greg Z.",
+    "email": "info@extractum.io",
+    "url": "https://www.linkedin.com/in/gregzem/"
+  },
+  "license": "MIT",
+  "hooks": "./hooks/hooks.json"
+}

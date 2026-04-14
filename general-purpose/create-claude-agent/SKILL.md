@@ -1,6 +1,9 @@
 ---
 name: create-claude-agent
 description: Create production-ready Claude agent projects using the Claude Agent SDK.
+author: Greg Z.
+author_email: info@extractum.io
+author_url: https://www.linkedin.com/in/gregzem/
 ---
 
 # Create Claude Agent

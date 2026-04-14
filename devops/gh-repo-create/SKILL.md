@@ -1,6 +1,9 @@
 ---
 name: gh-repo-create
 description: Create a GitHub repository, configure SSH deployment keys, and set up git remote for the current folder. Works on macOS, Linux, and Unix systems.
+author: Greg Z.
+author_email: info@extractum.io
+author_url: https://www.linkedin.com/in/gregzem/
 ---
 
 # GitHub Repository Creation & Setup

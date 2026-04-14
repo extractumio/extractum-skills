@@ -1,6 +1,9 @@
 ---
 name: claude-orphan-cleanup
 description: Find and terminate orphaned Claude Code CLI processes that consume CPU resources. Works on macOS and Linux systems.
+author: Greg Z.
+author_email: info@extractum.io
+author_url: https://www.linkedin.com/in/gregzem/
 ---
 
 # Claude Code Orphan Process Cleanup
@@ -61,8 +64,8 @@ Found 3 orphaned Claude Code process(es):
 PID      CPU%     ELAPSED      COMMAND (truncated)
 --------------------------------------------------------------------------------
 11409    100.0%   16:23:34     /bin/bash -c -l { shopt -u extglob || setopt NO_EXTENDED_GLO...
-96647    99.1%    17:16:44     /bin/bash -c -l SNAPSHOT_FILE=/Users/greg/.claude/shell-snap...
-98091    99.2%    01-11:38:47  /bin/bash -c -l SNAPSHOT_FILE=/Users/greg/.claude/shell-snap...
+96647    99.1%    17:16:44     /bin/bash -c -l SNAPSHOT_FILE=$HOME/.claude/shell-snap...
+98091    99.2%    01-11:38:47  /bin/bash -c -l SNAPSHOT_FILE=$HOME/.claude/shell-snap...
 
 Run with --kill to terminate these processes
 Run with --force to kill without confirmation
@@ -139,7 +142,7 @@ claude-cleanup
 crontab -e
 
 # Add hourly cleanup job
-0 * * * * /Users/greg/bin/claude-cleanup --force >> /tmp/claude-cleanup.log 2>&1
+0 * * * * $HOME/bin/claude-cleanup --force >> /tmp/claude-cleanup.log 2>&1
 ```
 
 **Benefits**:
@@ -209,7 +212,7 @@ cat > ~/Library/LaunchAgents/com.user.claude-cleanup.plist << 'EOF'
     <string>com.user.claude-cleanup</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/greg/bin/claude-cleanup</string>
+        <string>/Users/YOUR_USERNAME/bin/claude-cleanup</string>
         <string>--force</string>
     </array>
     <key>StartInterval</key>
@@ -429,5 +432,5 @@ Ensure the script is in your PATH:
 echo $PATH | grep -q "$HOME/bin" && echo "OK" || echo "Add ~/bin to PATH"
 
 # Or run with full path
-/Users/greg/bin/claude-cleanup
+$HOME/bin/claude-cleanup
 ```

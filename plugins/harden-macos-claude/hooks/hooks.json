@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 ${CLAUDE_PLUGIN_ROOT}/scripts/pretool_guard.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 ${CLAUDE_PLUGIN_ROOT}/scripts/posttool_guard.py"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -9,6 +9,9 @@ argument-hint: [website-url]
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Agent, WebSearch, WebFetch
 model: opus
 effort: max
+author: Greg Z.
+author_email: info@extractum.io
+author_url: https://www.linkedin.com/in/gregzem/
 ---
 
 # Promotion & Distribution Research Agent

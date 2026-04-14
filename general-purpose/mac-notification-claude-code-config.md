@@ -545,7 +545,7 @@ This is the bridge that catches marker text flowing through tmux and runs the lo
 |---|---|
 | **Regular Expression** | `@@CLAUDE_NOTIFY\|([^|]*)\|([^|]*)\|([^|]*)@@` |
 | **Action** | Run Command... |
-| **Parameters** | `/Users/greg/.claude/hooks/local-notify.sh "\1" "\2" "\3"` |
+| **Parameters** | `$HOME/.claude/hooks/local-notify.sh "\1" "\2" "\3"` |
 | **Instant** | Checked |
 | **Enabled** | Checked |
 

@@ -1,0 +1,60 @@
+# Trusted outbound HTTP domains.
+# One pattern per line. `#` starts a comment. Blank lines ignored.
+# A leading `*.` means "any subdomain of"; bare hostnames match exactly.
+#
+# Effect: if EVERY https://… host in a Bash command is allow-listed AND
+# there is no sensitive source (id_rsa, env dump, $*_KEY, etc.), the
+# `curl|python3` / `curl|node` / `curl|perl` / `curl|ruby` remote-exec
+# rule is downgraded from BLOCK to warn.  Piping to `sh|bash|zsh` is
+# ALWAYS blocked regardless of domain — compromised TLS / CDN is enough
+# reason to never trust downloaded code.
+#
+# Keep this list narrow.  Add domains only for stable, well-operated APIs
+# you genuinely use from shell pipelines.
+
+# Google APIs
+*.googleapis.com
+oauth2.googleapis.com
+storage.googleapis.com
+accounts.google.com
+
+# GitHub
+api.github.com
+raw.githubusercontent.com
+objects.githubusercontent.com
+codeload.github.com
+uploads.github.com
+
+# Package registries
+registry.npmjs.org
+pypi.org
+files.pythonhosted.org
+crates.io
+static.crates.io
+rubygems.org
+proxy.golang.org
+sum.golang.org
+
+# Anthropic
+api.anthropic.com
+console.anthropic.com
+
+# OpenAI
+api.openai.com
+
+# Cloud provider APIs
+*.amazonaws.com
+*.azure.com
+login.microsoftonline.com
+graph.microsoft.com
+
+# Developer tooling
+hub.docker.com
+registry.hub.docker.com
+ghcr.io
+quay.io
+
+# Common data APIs
+api.stripe.com
+api.openweathermap.org
+httpbin.org
