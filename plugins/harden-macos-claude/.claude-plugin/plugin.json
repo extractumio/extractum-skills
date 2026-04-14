@@ -7,6 +7,5 @@
     "email": "info@extractum.io",
     "url": "https://www.linkedin.com/in/gregzem/"
   },
-  "license": "MIT",
-  "hooks": "./hooks/hooks.json"
+  "license": "MIT"
 }
