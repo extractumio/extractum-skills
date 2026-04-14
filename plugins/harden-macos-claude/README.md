@@ -60,19 +60,44 @@ claude --plugin-dir "$PWD"
 
 That's it. Hooks are wired automatically via `hooks/hooks.json`.
 
-### Option B — Claude Code marketplace (if you publish it)
+### Option B — Claude Code marketplace
 
-```bash
-claude plugin install harden-macos-claude@<marketplace>
+Inside a Claude Code session, register this repo as a marketplace and install
+the plugin:
+
+```
+/plugin marketplace add extractumio/extractum-skills
+/plugin install harden-macos-claude@extractum-skills
+```
+
+Verify:
+
+```
+/plugin marketplace list
+/plugin list
+```
+
+Later, pick up upstream updates with:
+
+```
+/plugin marketplace update extractum-skills
+/plugin update harden-macos-claude@extractum-skills
 ```
 
 ### Post-install: add the security charter
 
 Claude Code plugins cannot merge into the user's global `CLAUDE.md`, so the
-plugin ships an installer that manages its charter inside a delimited block:
+plugin ships an installer that manages its charter inside a delimited block.
+After the marketplace install above, the plugin lives at
+`~/.claude/plugins/marketplaces/extractum-skills/plugins/harden-macos-claude/`
+(or, for Option A, wherever you cloned it). Run its `install.sh` **from your
+shell, not from inside a Claude Code session**:
 
 ```bash
-# from the plugin directory:
+# marketplace install:
+~/.claude/plugins/marketplaces/extractum-skills/plugins/harden-macos-claude/install.sh
+
+# local clone (Option A): from the plugin directory
 ./install.sh
 
 # or from the repo root:
@@ -94,10 +119,9 @@ What it does:
   upgrades). **Idempotent** — two runs = one block.
 - `install.sh --remove` strips the managed block and leaves your own content.
 
-**Run it from your shell**, not from inside a Claude Code session — the
-hooks (once enabled) will correctly block writes to `~/.claude/CLAUDE.md`.
-If you must run it through Claude, first set the unlock marker (see
-"Unlocking" below).
+Run it from your shell — the hooks (once enabled) will correctly block writes
+to `~/.claude/CLAUDE.md` from inside a Claude session. If you must run it
+through Claude, first set the unlock marker (see "Unlocking" below).
 
 ### Verify
 
