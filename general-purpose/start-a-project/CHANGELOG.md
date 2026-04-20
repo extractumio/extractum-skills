@@ -5,17 +5,17 @@ All notable changes to this skill are documented here. Versioning follows [SemVe
 ## [2.1.0] — 2026-04-20
 
 ### Added
-- **`CLAUDE.md` ↔ `AGENT.md` hardlink step** in `scripts/init_project.sh`. After copying templates, the scaffolder ensures both filenames point to the same inode so Claude Code (`CLAUDE.md`) and AGENT.md-spec-aware tools (`AGENT.md`) read the same file. Handles all four pre-states:
-  - Neither exists → template becomes `CLAUDE.md`, `AGENT.md` is linked to it.
-  - Only `CLAUDE.md` exists → `AGENT.md` is linked to it.
-  - Only `AGENT.md` exists → `CLAUDE.md` is linked to it (preserves user's existing content).
-  - Both exist with different content → warn and skip; `--force` relinks `AGENT.md` to `CLAUDE.md` (discarding the diverged `AGENT.md`).
+- **`CLAUDE.md` ↔ `AGENTS.md` hardlink step** in `scripts/init_project.sh`. After copying templates, the scaffolder ensures both filenames point to the same inode so Claude Code (`CLAUDE.md`) and AGENTS.md-spec-aware tools (`AGENTS.md`) read the same file. Handles all four pre-states:
+  - Neither exists → template becomes `CLAUDE.md`, `AGENTS.md` is linked to it.
+  - Only `CLAUDE.md` exists → `AGENTS.md` is linked to it.
+  - Only `AGENTS.md` exists → `CLAUDE.md` is linked to it (preserves user's existing content).
+  - Both exist with different content → warn and skip; `--force` relinks `AGENTS.md` to `CLAUDE.md` (discarding the diverged `AGENTS.md`).
 - Portable inode detection (`stat -f %i` on macOS, `stat -c %i` on Linux).
 - `--dry-run` reports the intended link/relink action.
 
 ### Notes
 - Hardlinks do not survive `git clone` — a fresh clone materializes two independent files with identical content. Re-run the scaffolder after cloning to restore the single-file relationship.
-- Existing v2.0.0 scaffolds re-running the script will keep their `CLAUDE.md` and acquire a hardlinked `AGENT.md` alongside it (no file overwritten).
+- Existing v2.0.0 scaffolds re-running the script will keep their `CLAUDE.md` and acquire a hardlinked `AGENTS.md` alongside it (no file overwritten).
 
 ## [2.0.0] — 2026-04-20
 

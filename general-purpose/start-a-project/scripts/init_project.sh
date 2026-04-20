@@ -115,18 +115,18 @@ copy_template() {
   fi
 }
 
-# Capture pre-state of CLAUDE.md / AGENT.md so the hardlink logic below is
+# Capture pre-state of CLAUDE.md / AGENTS.md so the hardlink logic below is
 # driven by what the user had BEFORE the scaffold ran, not by what's on disk
 # after (which would conflate template-created files with pre-existing user files).
 claude_path="$TARGET_DIR/CLAUDE.md"
-agent_path="$TARGET_DIR/AGENT.md"
+agent_path="$TARGET_DIR/AGENTS.md"
 had_claude=0; had_agent=0
 [[ -e "$claude_path" ]] && had_claude=1
 [[ -e "$agent_path" ]] && had_agent=1
 
-# If the user has AGENT.md but no CLAUDE.md, treat AGENT.md as the source of
+# If the user has AGENTS.md but no CLAUDE.md, treat AGENTS.md as the source of
 # truth: skip the CLAUDE.md template and let the hardlink step point
-# CLAUDE.md at AGENT.md.
+# CLAUDE.md at AGENTS.md.
 skip_claude_template=0
 if [[ $had_agent -eq 1 && $had_claude -eq 0 && $FORCE -eq 0 ]]; then
   skip_claude_template=1
@@ -138,7 +138,7 @@ while IFS= read -r -d '' src; do
   rel="${src#$TEMPLATES_DIR/}"
   out="${rel%.template}"
   if [[ "$out" == "CLAUDE.md" && $skip_claude_template -eq 1 ]]; then
-    printf '  %sskip%s    CLAUDE.md %s(will hardlink to existing AGENT.md)%s\n' \
+    printf '  %sskip%s    CLAUDE.md %s(will hardlink to existing AGENTS.md)%s\n' \
       "$C_BLUE" "$C_RESET" "$C_DIM" "$C_RESET"
     skipped=$((skipped+1))
     continue
@@ -146,9 +146,9 @@ while IFS= read -r -d '' src; do
   copy_template "$src" "$out"
 done < <(find "$TEMPLATES_DIR" -type f -print0 | sort -z)
 
-# Ensure CLAUDE.md and AGENT.md are the same file (hardlinked), so edits to
+# Ensure CLAUDE.md and AGENTS.md are the same file (hardlinked), so edits to
 # one show up in the other. The two filenames serve different tool ecosystems
-# (Claude Code vs. the AGENT.md spec) but the content should never diverge.
+# (Claude Code vs. the AGENTS.md spec) but the content should never diverge.
 inode_of() {
   # Portable: macOS uses `stat -f %i`, GNU uses `stat -c %i`.
   stat -f %i "$1" 2>/dev/null || stat -c %i "$1" 2>/dev/null
@@ -167,7 +167,7 @@ link_pair() {
 }
 
 if [[ $had_claude -eq 1 && $had_agent -eq 1 ]]; then
-  # Both pre-existed. Nothing we did should have touched AGENT.md, so checking
+  # Both pre-existed. Nothing we did should have touched AGENTS.md, so checking
   # inodes on disk is still meaningful.
   same_inode=0
   if [[ "$(inode_of "$claude_path")" == "$(inode_of "$agent_path")" ]]; then
@@ -176,29 +176,29 @@ if [[ $had_claude -eq 1 && $had_agent -eq 1 ]]; then
   if [[ $same_inode -eq 1 ]]; then
     : # already linked — no-op
   elif [[ $FORCE -eq 1 ]]; then
-    # With --force: keep CLAUDE.md as canonical, re-link AGENT.md to it.
+    # With --force: keep CLAUDE.md as canonical, re-link AGENTS.md to it.
     if [[ $DRY_RUN -eq 1 ]]; then
-      printf '  %swould relink%s AGENT.md <-hardlink-> CLAUDE.md %s(prior AGENT.md would be replaced)%s\n' \
+      printf '  %swould relink%s AGENTS.md <-hardlink-> CLAUDE.md %s(prior AGENTS.md would be replaced)%s\n' \
         "$C_YELLOW" "$C_RESET" "$C_DIM" "$C_RESET"
     else
       rm -f "$agent_path"
       ln "$claude_path" "$agent_path"
-      printf '  %srelink%s  AGENT.md <-hardlink-> CLAUDE.md %s(prior AGENT.md replaced)%s\n' \
+      printf '  %srelink%s  AGENTS.md <-hardlink-> CLAUDE.md %s(prior AGENTS.md replaced)%s\n' \
         "$C_YELLOW" "$C_RESET" "$C_DIM" "$C_RESET"
     fi
   else
-    printf '  %swarn%s    CLAUDE.md and AGENT.md both exist with different content; leaving as-is %s(--force to relink)%s\n' \
+    printf '  %swarn%s    CLAUDE.md and AGENTS.md both exist with different content; leaving as-is %s(--force to relink)%s\n' \
       "$C_YELLOW" "$C_RESET" "$C_DIM" "$C_RESET"
   fi
 elif [[ $had_claude -eq 1 && $had_agent -eq 0 ]]; then
-  # Only CLAUDE.md existed — link AGENT.md to it.
+  # Only CLAUDE.md existed — link AGENTS.md to it.
   link_pair "$claude_path" "$agent_path"
 elif [[ $had_claude -eq 0 && $had_agent -eq 1 ]]; then
-  # Only AGENT.md existed — link CLAUDE.md to AGENT.md (preserving user content).
+  # Only AGENTS.md existed — link CLAUDE.md to AGENTS.md (preserving user content).
   link_pair "$agent_path" "$claude_path"
 else
   # Neither existed — CLAUDE.md was just scaffolded from the template;
-  # mirror AGENT.md onto it.
+  # mirror AGENTS.md onto it.
   link_pair "$claude_path" "$agent_path"
 fi
 

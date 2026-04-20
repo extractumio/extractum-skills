@@ -26,7 +26,7 @@ Bootstraps the canonical `CLAUDE.md` + `docs/` + `.claude/` structure into a tar
 ```
 <target>/
 ├── CLAUDE.md
-├── AGENT.md                      # hardlinked to CLAUDE.md (same inode, one file)
+├── AGENTS.md                      # hardlinked to CLAUDE.md (same inode, one file)
 ├── docs/
 │   ├── architecture.md
 │   ├── source-map.md
@@ -55,21 +55,21 @@ Bootstraps the canonical `CLAUDE.md` + `docs/` + `.claude/` structure into a tar
 
 Every generated `.md` carries a `Last updated: YYYY-MM-DD` line. Empty sections are kept (with `_TBD_`) so the structure persists until the user fills them in.
 
-## `CLAUDE.md` and `AGENT.md` are the same file
+## `CLAUDE.md` and `AGENTS.md` are the same file
 
-After copying templates, the scaffolder hardlinks `AGENT.md` to `CLAUDE.md` (same inode, one on-disk file, two directory entries). Claude Code reads `CLAUDE.md`; other tools following the [AGENT.md spec](https://agent.md) read `AGENT.md`. Editing one edits the other — there is no sync step, no drift.
+After copying templates, the scaffolder hardlinks `AGENTS.md` to `CLAUDE.md` (same inode, one on-disk file, two directory entries). Claude Code reads `CLAUDE.md`; other tools following the [AGENTS.md spec](https://agents.md) read `AGENTS.md`. Editing one edits the other — there is no sync step, no drift.
 
 Behavior:
 
 | State before run | Result |
 |---|---|
-| Neither exists | Template → `CLAUDE.md`, then hardlink `AGENT.md` to it |
-| Only `CLAUDE.md` exists | Hardlink `AGENT.md` to `CLAUDE.md` |
-| Only `AGENT.md` exists | Hardlink `CLAUDE.md` to `AGENT.md` (preserves user's existing content) |
+| Neither exists | Template → `CLAUDE.md`, then hardlink `AGENTS.md` to it |
+| Only `CLAUDE.md` exists | Hardlink `AGENTS.md` to `CLAUDE.md` |
+| Only `AGENTS.md` exists | Hardlink `CLAUDE.md` to `AGENTS.md` (preserves user's existing content) |
 | Both exist, same inode | No-op |
-| Both exist, different content | Warn and skip (use `--force` to re-link `AGENT.md` → `CLAUDE.md`, discarding the diverged `AGENT.md`) |
+| Both exist, different content | Warn and skip (use `--force` to re-link `AGENTS.md` → `CLAUDE.md`, discarding the diverged `AGENTS.md`) |
 
-**Caveat:** hardlinks do not survive `git clone`. Git stores two independent blobs for the two paths. On a fresh clone the files will have identical content but be separate files until re-linked. Run the scaffolder again (or `rm AGENT.md && ln CLAUDE.md AGENT.md`) after cloning to restore the single-file relationship.
+**Caveat:** hardlinks do not survive `git clone`. Git stores two independent blobs for the two paths. On a fresh clone the files will have identical content but be separate files until re-linked. Run the scaffolder again (or `rm AGENTS.md && ln CLAUDE.md AGENTS.md`) after cloning to restore the single-file relationship.
 
 ## How to invoke
 
