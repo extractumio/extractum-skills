@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    cat >&2 <<EOF
+Usage: tms connect <host> <session>
+
+  Attach to tmux session <session> on <host> over ssh, creating it if needed.
+  Uses iTerm2 tmux control mode (-CC) so the remote session integrates with
+  native iTerm2 tabs, scrollback, and window management. Any other client
+  already attached to <session> is detached (-D).
+EOF
+    exit 2
+}
+
+cmd="${1:-}"
+[[ "$cmd" == "connect" ]] || usage
+host="${2:-}"
+session="${3:-}"
+[[ -n "$host" && -n "$session" ]] || usage
+
+exec ssh -t "$host" "tmux -CC new-session -A -D -s $(printf '%q' "$session")"
