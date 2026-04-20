@@ -13,6 +13,9 @@ description: >
   implementation tasks.
 tools: Read, Grep, Glob, Bash, WebFetch, AskUserQuestion, TaskCreate, TaskUpdate, TaskList
 model: opus
+author: Greg Z.
+author_email: info@extractum.io
+author_url: https://www.linkedin.com/in/gregzem/
 ---
 
 # The Pragmatic Senior Contributor

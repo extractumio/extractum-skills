@@ -9,6 +9,9 @@ description: >
 version: 2.1.0
 argument-hint: [target-dir]
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
+author: Greg Z.
+author_email: info@extractum.io
+author_url: https://www.linkedin.com/in/gregzem/
 ---
 
 # Start A Project
