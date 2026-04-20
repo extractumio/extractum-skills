@@ -1,10 +1,26 @@
+---
+name: mac-notification-claude-code-config
+description: Configure native macOS notification banners for Claude Code events (Stop, PermissionRequest, Elicitation) via terminal-notifier hooks, for both local macOS and remote Linux/tmux -CC setups bridged through iTerm2 Triggers. Use when the user asks to enable macOS notifications for Claude Code, be pinged when long tasks finish, get alerts for permission or MCP input prompts, or set up the iTerm2 Trigger that catches @@CLAUDE_NOTIFY markers from a remote server.
+author: Greg Z.
+author_email: info@extractum.io
+author_url: https://www.linkedin.com/in/gregzem/
+allowed-tools: Bash, Read, Write, Edit
+---
+
 # macOS Native Notifications for Claude Code
 
 Send native macOS notification banners when Claude Code needs your attention — long-running tasks finishing, permission requests, and MCP input prompts. Notifications are suppressed when iTerm2 is already focused, and include the terminal session identity so you know exactly which session needs you.
 
 Works both **locally on macOS** and **remotely on Linux** (Ubuntu/Debian) via iTerm2's tmux -CC integration.
 
-## What You Get
+## When to use this skill
+
+- User says something like "notify me when Claude finishes", "set up macOS notifications for Claude Code", "I want a banner when permission is needed", or "configure iTerm2 triggers for remote Claude notifications".
+- User is running Claude Code on a remote Linux box via `tmux -CC` and wants native notifications on their Mac.
+- User wants to customize the minimum task duration, switch to Terminal.app instead of iTerm2, or add a sound to notifications.
+- Troubleshooting: notifications aren't appearing, marker text is visible in terminal, stale `/tmp/.claude-task-start-*` files, or iTerm2 Trigger isn't firing.
+
+## What you get
 
 | Event | Notification | When |
 |---|---|---|
