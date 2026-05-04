@@ -17,10 +17,11 @@ allowed-tools: Read, Write, Edit, Grep, Glob, Bash
 
 # make-mvp — Value-First, Progressive Planning
 
-Use this skill any time you plan, prioritize, or sequence implementation work. It enforces two non-negotiable rules on every plan:
+Use this skill any time you plan, prioritize, or sequence implementation work. It enforces three non-negotiable rules on every plan:
 
 1. **Each step ends in a working version** that an end-user can use right now — not a stub, not a half-built scaffold for later steps.
 2. **The next step is whichever delivers the most user-visible value for the smallest scope** — not the most natural build order, not the most elegant abstraction, not what's easiest for the engineer.
+3. **Every step is communicated to the user as a concrete deliverable** — a named artifact, the capability it unlocks in user terms, and a way the user can verify the value landed. No engineering-jargon step titles, no "phase 2 of the platform".
 
 ## When to invoke
 
@@ -76,6 +77,16 @@ If a step requires another step to also be done before any user can benefit, the
 
 ## Procedure
 
+### 0. Anchor on the end-user before sequencing anything
+
+Value ranking is meaningless without a clear picture of *whose* value. Before you touch the backlog, get explicit on three things — ask the user if any are missing or unclear:
+
+- **Who is the end-user?** Be specific. ("Solo indie developer using the CLI from a terminal" is useful; "developers" is not.) If there are multiple user types, name the *primary* one for this round of planning.
+- **What outcome do they care about most?** The job they want done, in their words. Not "uses the export feature" but "gets a clean spreadsheet they can hand to their accountant".
+- **What would make them say 'this was worth it' after the very first usable version?** This is your bar for Iteration 0.
+
+Write these down in one short paragraph and reflect it back to the user before you sequence. If the user disagrees with your read, fix it now — every later prioritization decision rides on this. A wrong end-user picture produces a confidently wrong plan.
+
 ### 1. Inventory the candidate work
 
 Pull from:
@@ -101,13 +112,18 @@ Within bugfixes, order by how broken the user's experience currently is:
 
 ### 4. Sort the value-rank pile
 
-For each candidate, write down three things:
+For each candidate, write down five things:
 
 - **User-value sentence** — one sentence in *user* terms. ("User can export results to CSV." Not: "Implement export module.")
+- **Value tier** — High / Medium / Low, judged against the end-user's primary outcome from Step 0:
+  - *High*: directly advances the primary outcome, or removes a blocker that prevents the user from getting it. Most users feel the difference.
+  - *Medium*: improves an existing capability the user already gets value from (faster, more accurate, less friction), but they could live without it.
+  - *Low*: nice-to-have, edge case, or only matters to a small subset of users. Often a candidate to drop, not just defer.
+- **One-line value rationale** — *why* it has that tier, in user terms. ("Most users currently fall back to manual copy-paste — this removes the step they hate most.") This is what you'll show the user; if you can't write it, the value isn't really there.
 - **Standalone or dependent?** — if it depends on another item, the dependency moves up *only if the dependency itself ships user value when done alone*. If the dependency is pure plumbing, the two are one step (and probably too big — cut scope).
 - **Smallest scope that makes the value sentence true** — strip anything that isn't required for that sentence.
 
-Rank by value-per-scope. Highest user value at the smallest scope wins the next slot.
+Rank by value-per-scope, with tier as the primary key and scope as the tiebreaker. High-value-small-scope wins the next slot. A High that requires huge scope may lose to a Medium that ships in a day — note the tradeoff explicitly so the user can decide.
 
 ### 5. Sanity-check every step
 
@@ -141,14 +157,22 @@ Do **not** treat the pragmatic agent's output as the final plan to present — i
 
 ### 7. Present the plan
 
-Present the result as an ordered list. For each step:
+Open with a one-paragraph recap of who the end-user is and the outcome you're optimizing for (from Step 0). This frames every prioritization decision below — without it, the user can't tell whether you ranked things correctly.
 
-- **Step N — <one-line user-value sentence>**
-- What's in scope (short bullets).
-- What's explicitly out of scope (so future-you doesn't sneak it back in).
-- The "working version" the user has at the end of this step.
+Then present the result as an ordered list. For each step, communicate the deliverable in user terms — not engineering terms:
 
-Keep the plan short. If it has more than about five steps, you are planning too far ahead — detail the next 2–3 and leave the rest as one-liners until they become the next 2–3.
+- **Step N — <one-line user-value sentence>** *(Value: High / Medium / Low)*
+- **Deliverable** — the concrete artifact the user receives (e.g., "a `pdf2md` binary on macOS and Linux", "a hosted page at /convert", "a `--batch` flag added to the existing CLI"). Name the thing, don't describe the work.
+- **What the user can now do** — the new capability stated as the user would say it. ("I can drop a folder of PDFs in and get a folder of `.md` files back.")
+- **Why this rank** — the one-line value rationale from Step 4. This is the part that justifies the order; do not skip it.
+- **In scope** — short bullets, only what's needed for the value sentence.
+- **Out of scope** — what you are explicitly NOT doing in this step (so it doesn't sneak back in).
+- **Working version at the end** — the state of the product after this step ships, in one line.
+- **How the user verifies the value** — the smallest thing the user can do to confirm the deliverable lands. ("Run it on one of your own PDFs and check the Markdown is readable.") If you can't write this, the step is not really shipping value.
+
+Keep the plan short. If it has more than about five steps, you are planning too far ahead — detail the next 2–3 with full structure above, and leave the rest as one-liners (value sentence + tier only) until they become the next 2–3.
+
+End with an explicit decision prompt: *"Does this match what you want the user to get first? If the end-user picture or the top-ranked deliverable is wrong, say so before we start — re-ordering now is free, re-ordering after Step 1 isn't."*
 
 ### 8. Wait for the user's go-ahead
 
@@ -186,25 +210,43 @@ After steps 1–3 the user has nothing usable. Steps 4–7 are bundled by surfac
 
 **Good plan (progressive JPEG):**
 
-- **Step 1 — User can convert a single text-PDF to Markdown from the command line.**
-  - In scope: minimal CLI (`pdf2md input.pdf > out.md`), text-PDF parsing only, single file.
-  - Out of scope: OCR, batch, web, API, configuration files.
-  - Working version: a binary that converts text PDFs.
+*End-user: a technical writer who currently copy-pastes from PDF previews into their Markdown notes. Primary outcome: get clean Markdown out of a PDF without manual cleanup. First-version success bar: one PDF in, usable Markdown out, beats their current copy-paste workflow.*
 
-- **Step 2 — User can convert scanned PDFs via OCR.**
+- **Step 1 — User can convert a single text-PDF to Markdown from the command line.** *(Value: High)*
+  - Deliverable: a `pdf2md` binary (macOS + Linux), invoked as `pdf2md input.pdf > out.md`.
+  - What the user can now do: "I can turn a PDF I already have into a Markdown file in one command instead of copy-pasting."
+  - Why this rank: replaces the exact manual step the primary user hates most; everything else assumes this works.
+  - In scope: minimal CLI, text-PDF parsing only, single file.
+  - Out of scope: OCR, batch, web, API, config files.
+  - Working version: a binary that converts text PDFs.
+  - How the user verifies the value: run it on one of their own PDFs and check the Markdown is readable without hand-editing.
+
+- **Step 2 — User can convert scanned PDFs via OCR.** *(Value: High)*
+  - Deliverable: same `pdf2md` binary, now auto-detects scanned PDFs and OCRs them.
+  - What the user can now do: "I can run the same command on a scanned PDF and still get Markdown."
+  - Why this rank: a large share of real-world PDFs are scans; without this, Step 1 silently fails for them.
   - In scope: detect image-only pages, route through OCR, same CLI interface.
   - Out of scope: language tuning, accuracy knobs, batch.
   - Working version: same CLI, now also handles scanned PDFs.
+  - How the user verifies the value: run it on a scanned PDF and confirm text comes through.
 
-- **Step 3 — User can convert a directory of PDFs in one command.**
+- **Step 3 — User can convert a directory of PDFs in one command.** *(Value: Medium)*
+  - Deliverable: `pdf2md ./folder/` produces one `.md` per PDF, with a progress line per file.
+  - What the user can now do: "I can point it at a folder and walk away."
+  - Why this rank: removes a real friction (running one command per file) but only matters once Steps 1–2 are reliable.
   - In scope: glob input, parallel processing, progress output.
   - Out of scope: resumable jobs, persistent queue, web.
   - Working version: CLI handles single files *and* directories.
+  - How the user verifies the value: drop a folder of mixed PDFs in, get a folder of `.md` files out.
 
-- **Step 4 — User can drop a PDF on a web page and get Markdown back.**
+- **Step 4 — User can drop a PDF on a web page and get Markdown back.** *(Value: Medium)*
+  - Deliverable: a self-hostable web page at `/` with a drop zone and a download button.
+  - What the user can now do: "I can use this from a browser without installing anything, and share the URL with a colleague."
+  - Why this rank: opens the tool to non-CLI users, but every CLI user is already served — so it's an expansion, not a fix.
   - In scope: thin web UI that calls the existing conversion code.
   - Out of scope: accounts, history, multi-file UI.
   - Working version: a self-hostable web UI on top of the existing CLI.
+  - How the user verifies the value: open the page, drop a PDF, get Markdown back.
 
 API and richer UI features come later, ranked by which one a real user asks for first.
 
