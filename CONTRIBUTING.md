@@ -31,8 +31,8 @@ We are committed to providing a welcoming and inclusive environment. We expect a
 1. **Fork** this repository to your GitHub account
 2. **Clone** your fork locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/claude-skills.git
-   cd claude-skills
+   git clone https://github.com/YOUR_USERNAME/extractum-skills.git
+   cd extractum-skills
    ```
 3. **Create a branch** for your contribution:
    ```bash

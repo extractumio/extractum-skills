@@ -29,7 +29,7 @@ cp -r <skill-directory> /path/to/your/project/.claude/skills/
 Clone the repo and browse for skill templates, patterns, and examples to adapt to your own workflows:
 
 ```bash
-git clone https://github.com/extractum-io/claude-skills.git
+git clone https://github.com/extractumio/extractum-skills.git
 ```
 
 ## Contributing
