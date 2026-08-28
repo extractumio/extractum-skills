@@ -9,13 +9,14 @@ description: >-
   include uncertain findings. Use when the user asks to review a diff, branch,
   MR, or PR, or to hunt for bugs before committing. Pass --comment to post
   findings as inline PR/MR comments, or --fix to apply the surviving findings
-  to the working tree after the review.
-argument-hint: "[low|medium|high|xhigh|max] [--fix] [--comment] [<target>]"
+  after the review; for a PR/MR target, --fix also commits and pushes validated
+  fixes to that review's head branch.
+argument-hint: "[low|medium|high|xhigh|max] [--fix] [--comment] [<target>] (options in any order)"
 ---
 
 `/code-review-cc → scope the diff → per-angle Find (parallel) → Verify (parallel) → (Sweep) → ranked findings`
 
-Last updated: 2026-07-09
+Last updated: 2026-08-28
 
 Review the current diff for **correctness bugs** and
 **reuse / simplification / efficiency** cleanups. Unlike `/simplify-code`
@@ -42,19 +43,32 @@ otherwise take the stated fallback.
 ## Selecting the review
 
 Parse the argument string the user passed when invoking the skill
-(`$ARGUMENTS`, or the equivalent on your host):
+(`$ARGUMENTS`, or the equivalent on your host), preserving its shell quoting.
+Before a literal `--`, flags and effort are order-independent: remove one
+recognized effort token and the `--fix` / `--comment` flags wherever they
+appear, then treat the one remaining logical token as the target. A literal
+`--` ends option parsing, so the one logical token after it is always the
+target even when it is named `high`, `--fix`, or another reserved token.
+Reject ambiguous invocations instead of guessing: duplicate effort tokens,
+duplicate flags, unknown `--...` options, multiple targets before `--`, a
+candidate target on both sides of `--`, or anything other than exactly one
+target after `--` are errors that require a corrected invocation. Recognized
+flags and effort may appear before `--` when the escaped target follows it.
 
-- **Effort level** — the first token, one of `low` · `medium` · `high` ·
-  `xhigh` · `max`. If no level is given, default to **medium**. Higher levels
-  trade precision for recall: low/medium surface fewer, high-confidence
+- **Effort level** — one token, anywhere in the arguments: `low` · `medium` ·
+  `high` · `xhigh` · `max`. If no level is given, default to **medium**. Higher
+  levels trade precision for recall: low/medium surface fewer, high-confidence
   findings; high→max widen coverage and may include uncertain findings.
-- **`--fix`** — after producing the findings list, also apply them (see the
-  *Applying fixes* appendix).
+- **`--fix`** — after producing the findings list, also apply them. When the
+  target is a PR/MR, commit and push validated fixes back to that review's
+  existing head branch (see the *Applying fixes* appendix).
 - **`--comment`** — post findings as inline PR/MR comments (see the *Posting
   review comments* appendix).
-- **`<target>`** — anything left over (a PR/MR number, branch name, or file
-  path) is the review target. If a target is given, prepend `Review target:
-  \`<target>\`` to the run and review that instead of the default diff range.
+- **`<target>`** — anything left over (a PR/MR number, full GitHub
+  `/pull/<n>` URL, full GitLab `/-/merge_requests/<n>` URL, branch name, or
+  file path) is the review target. If a target is given, prepend
+  `Review target: \`<target>\`` to the run and review that instead of the
+  default diff range.
 
 `low` is a self-contained quick pass (next section). Every other level runs
 the shared pipeline (Phases 0–3) with the parameters from this table:
@@ -118,11 +132,15 @@ Run `git diff @{upstream}...HEAD` (or `git diff origin/main...HEAD` /
 `git diff HEAD~1` if there's no upstream or HEAD is detached) to get the
 unified diff under review. If there are uncommitted changes, or the range diff
 is empty, also run `git diff HEAD` and include the working-tree changes in
-scope — the review often runs before the commit. If a PR/MR number, branch
-name, or file path was passed as an argument, review that target instead. If a
-PR/MR number was passed but neither `gh` nor `glab` is available to fetch it,
-say so and ask the user to check the branch out locally, then review the local
-range. Treat this diff as the review scope.
+scope — the review often runs before the commit. If a PR/MR number or URL,
+branch name, or file path was passed as an argument, review that target instead.
+Resolve the target's forge from its URL or, for a number, from the current
+remote. If the matching forge client/API path (`gh` for GitHub or `glab` for
+GitLab) is unavailable, say so and ask the user to check the branch out locally,
+then review the local range. Treat this diff as the review scope. With `--fix`,
+an unavailable matching forge metadata/API path is a publishing blocker: stop
+before editing and report it instead of downgrading the requested operation to
+working-tree-only fixes.
 
 **Exclude noise before fanning out.** Drop from scope: generated code
 (`*.pb.go`, `*_pb2.py`, `*.gen.*`, generated mocks), lockfiles
@@ -393,3 +411,66 @@ the finding skipped. If findings were reported through a structured findings
 tool, re-report them once with `outcome` set on each (`fixed` / `skipped` /
 `no_change_needed`). Finish with a brief summary of what was fixed and what
 was skipped.
+
+## Publishing PR/MR fixes
+
+When `--fix` is combined with an explicit PR/MR target, publishing the
+validated fixes to that review is part of the requested operation. The
+combination authorizes the scoped, non-destructive commit-and-push lifecycle
+for the review's existing head branch. A PR/MR target without `--fix` remains
+read-only, and `--fix` on a branch/file/default diff remains working-tree-only.
+
+Before editing, resolve the exact base repository, head repository, head branch,
+head SHA, and review state from the forge rather than inferring them from the
+current checkout. A full GitHub `/pull/<n>` URL or GitLab
+`/-/merge_requests/<n>` URL is a PR/MR target for this purpose. Require the
+review to remain open and unmerged, require the head ref to exist, and verify
+that the authenticated identity can push to the head repository and branch. If
+the resolved head repository differs from the base repository explicitly named
+by a URL target, or from the current checkout's forge repository for a numeric
+target, report the exact head repository and branch and obtain the user's
+explicit confirmation before editing or pushing to that contributor fork.
+Missing or inconclusive repository, state, ref, or permission metadata is a
+blocker, not permission to continue.
+
+Use an existing head-branch worktree only when its index and working tree are
+clean, it has no commits beyond the review, and `HEAD` exactly equals the
+resolved head SHA. Otherwise fetch the review and create an isolated worktree
+at that exact SHA using the repository's documented workflow. Preserve
+unrelated changes by leaving their checkout untouched. If the review cannot be
+isolated safely, stop and report the blocker instead of mixing unrelated state
+into the fix commit.
+
+After applying and validating the surviving fixes:
+
+1. Recheck the working-tree diff and confirm the index was empty before this
+   run. Stage only the exact fix paths — never broad-add unrelated files — then
+   inspect the complete cached diff to confirm it contains only reviewed fix
+   hunks.
+2. Record the pre-commit `HEAD` SHA and the approved staged tree SHA (for
+   example, from `git write-tree`) and require the pre-commit `HEAD` to equal
+   the pre-edit forge head SHA. Then commit using the repository's commit
+   conventions; if none are documented, use `fix: apply code-review findings`.
+   Before any push, require the new commit's sole parent to equal that same
+   pre-edit SHA and its tree to equal the approved staged tree. Reinspect the
+   complete committed patch and confirm it contains only the approved fixes,
+   then recheck both the index and working tree. If a hook changes or adds
+   committed, staged, or unstaged content, stop and review the resulting state;
+   do not amend, restage, discard, or push it automatically.
+3. Immediately before pushing, re-resolve the review state, head repository,
+   head branch, head SHA, ref existence, and authenticated push permission.
+   Require the review to remain open and unmerged, retain push permission, and
+   require every resolved repository, branch, SHA, and ref value to match its
+   pre-edit value; any concurrent update or metadata change is a blocker. Push
+   without force to that exact PR/MR head repository and branch.
+   Never redirect the push to the base/default branch or a similarly named
+   branch.
+4. Verify through the forge that the PR/MR head SHA now equals the pushed
+   commit, then report the branch, commit SHA, review URL, and current status.
+
+If no finding survives, every fix is skipped, or the fixes produce no file
+change, do not create an empty commit or push; report that there was nothing to
+publish. If validation, hooks, permissions, branch protection, or a concurrent
+head update blocks the push, do not skip gates, force-push, overwrite remote
+work, or silently leave the result local. Report the exact blocker and retain
+the safely validated local commit when one exists.
