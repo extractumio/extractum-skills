@@ -37,7 +37,74 @@ A request often combines modes: "scrape the dashboard after logging in" = **auth
 3. **Never commit auth state files.** Warn the user if `*.auth-state.json` or `state-*.json` files exist outside `.gitignore`.
 4. **Always `snapshot` before interacting** with elements — you need the element refs (`e1`, `e2`, etc.).
 5. **Name sessions semantically** when using multiple sessions (e.g., `-s=auth`, `-s=scrape-products`).
-6. **Prefer `eval` and `snapshot` over `screenshot`** for data extraction — they are more token-efficient and machine-readable. Use `screenshot` only when visual context is specifically needed (layout debugging, visual comparison).
+6. **`eval` and `run-code` cost ~1.0 s per call — every time.** This is a fixed price on the JS-execution path, not proportional to the work: `eval "() => 1+1"` costs the same second as a full table extraction. Never call them per item, per row, or per page. See **Performance** below — it is the single biggest factor in how fast a workflow finishes.
+7. **Reach for `snapshot` before `eval`** for data extraction. `snapshot` costs ~0.04 s and `goto` writes one automatically on every navigation, so the page's text, links and roles are usually already on disk before you run anything. Use `screenshot` only when visual context is specifically needed (layout debugging, visual comparison).
+
+## Performance — read before writing any extraction loop
+
+Measured on this machine (macOS arm64, Chrome headless, warm session, median of 7):
+
+| Command | Cost | Notes |
+|---------|------|-------|
+| `goto` / `open` | **0.057 s** | also writes a full a11y snapshot to `.playwright-cli/` |
+| `snapshot` | **0.040 s** | accessibility tree: text, roles, links, refs |
+| `screenshot` | **0.068 s** | |
+| `click`, `fill`, `resize` | ~0.05 s | |
+| **`eval`** | **1.06 s** | flat — identical for `1+1` and for a 10-record extraction |
+| **`run-code`** | **1.07 s** | same fixed cost as `eval` |
+
+Cost of a job is therefore ≈ `(number of eval/run-code calls) × 1.06 s`. Everything else is noise.
+
+### The three strategies, measured on the same task (scrape 10 pages, 100 records)
+
+| Strategy | Local | Public site | Verdict |
+|----------|-------|-------------|---------|
+| `goto` + `eval` per page (10 evals) | 11.12 s | 13.92 s | **never do this** |
+| One `run-code` loop over all 10 pages (1 call) | 1.13 s | 3.74 s | good, always correct |
+| `goto` per page + parse the auto-written snapshot (0 evals) | **0.61 s** | **3.55 s** | fastest, verify the count |
+
+### Rules
+
+1. **Default to snapshot parsing.** `goto` already wrote the a11y tree to `.playwright-cli/page-*.yml` and printed its path. Read that file and parse it — no extra CLI call, no eval, no second.
+2. **If you need real DOM queries, batch them into exactly one `run-code`.** Loop over all pages/items *inside* the browser and return one JSON payload. One second total, not one per item.
+3. **Never put `eval` inside a shell loop.** That is the difference between 0.6 s and 11 s.
+4. **Always verify the record count** after snapshot parsing, and assert it per page. The a11y tree is a rendered view, not the DOM: nodes differ by site (a `<span>` surfaces as `generic`, a `<p>` as `paragraph`, an author as a bare `text:` line), and a naive regex silently drops rows rather than failing. If the count is wrong and the pattern is not an easy fix, fall back to strategy 2 — correctness beats the extra second.
+
+   The trap that costs the most time: **the file is YAML, so values get quoted when they contain a colon or other special characters.** The same field appears both ways on different rows —
+
+   ```yaml
+   - generic [ref=e13]: “A quote without punctuation trouble”
+   - generic [ref=e77]: "“I believe in Christianity: as I believe the sun has risen”"
+   ```
+
+   A pattern anchored to the raw text silently skips every quoted row. Allow the optional
+   wrapper (`: "?` …) and strip it back off. This alone accounted for 4 lost records
+   out of 100 on a real site — a 96 % result that looks like success.
+
+### Snapshot-parsing recipe
+
+```bash
+# 1. Navigate; the snapshot path is printed in the output
+playwright-cli -s=scrape goto https://example.com/list?page=1
+# -> ### Snapshot
+#    - [Snapshot](.playwright-cli/page-2026-08-29T20-50-10-534Z.yml)
+
+# 2. Look at the tree ONCE to learn this site's shape, then parse all pages with that pattern
+head -40 .playwright-cli/page-*.yml
+```
+
+Typical shapes to match:
+
+```yaml
+- paragraph [ref=e10]: The quote body text          # <p>   -> paragraph
+- generic [ref=e13]: The quote body text            # <span>-> generic
+- generic [ref=e14]:
+    - text: by Albert Einstein                      # bare text node
+    - link "(about)" [ref=e15]:
+        - /url: /author/Albert-Einstein             # links expose their href
+```
+
+Then loop `goto` over the pages and parse each emitted file locally. Zero `eval` calls.
 
 ## Session Lifecycle
 
@@ -140,10 +207,15 @@ playwright-cli network
 # 4. Snapshot — accessibility tree (element states, visibility, roles)
 playwright-cli snapshot
 
-# 5. Evaluate specific properties
-playwright-cli eval "document.title"
-playwright-cli eval "getComputedStyle(document.querySelector('.broken-element')).display"
-playwright-cli eval "el => ({ width: el.offsetWidth, height: el.offsetHeight, visible: el.offsetParent !== null })" e5
+# 5. Evaluate specific properties — one call, not three (3 evals = 3.2 s, this = 1.1 s)
+playwright-cli run-code "async page => await page.evaluate(() => {
+  const el = document.querySelector('.broken-element');
+  return {
+    title: document.title,
+    display: el && getComputedStyle(el).display,
+    box: el && { w: el.offsetWidth, h: el.offsetHeight, visible: el.offsetParent !== null }
+  };
+})"
 ```
 
 ### Deep Debugging with Tracing
@@ -225,31 +297,48 @@ playwright-cli run-code "async page => {
 
 Before scraping, assess the page complexity:
 
-| Page Type | Strategy |
-|-----------|----------|
-| Static content, single page | `snapshot` + `eval` for targeted extraction |
-| Dynamic/SPA content | `snapshot` after waiting for network idle |
-| Paginated list | Loop with `click` on next + `snapshot` each page |
-| Infinite scroll | `mousewheel` loop + `eval` to check new content |
-| Multi-page (known URLs) | `run-code` with page loop for efficiency |
-| Behind authentication | Auth first, then any of the above |
-| Data in API responses | `network` to find API endpoints, then `eval` with `fetch()` |
+| Page Type | Strategy | eval calls |
+|-----------|----------|------------|
+| Static content, single page | `goto`, then parse the emitted snapshot | **0** |
+| Dynamic/SPA content | `goto`, wait for the selector, then parse the snapshot | 0 |
+| Paginated list, known URLs | `goto` each URL + parse each snapshot | **0** |
+| Paginated list, must click "next" | Loop `click` + `snapshot`, parse each | 0 |
+| Needs precise DOM/CSS queries | **One** `run-code` looping over every page | **1 total** |
+| Infinite scroll | One `run-code` doing the whole scroll loop inside the browser | 1 total |
+| Behind authentication | Auth first, then any of the above | — |
+| Data in API responses | `network` to find the endpoint, then **one** `run-code` with `fetch()` | 1 total |
+
+Pick the top row that satisfies the task. Drop to `run-code` only when snapshot parsing cannot express what you need, or when its record count comes out wrong.
 
 ### Single-Page Extraction
 
+Preferred — no `eval`, ~0.06 s:
+
 ```bash
 playwright-cli open https://example.com/data-page
-playwright-cli snapshot
+# the output prints the snapshot path; read and parse that file directly
+```
 
-# Extract specific data via eval
-playwright-cli eval "JSON.stringify([...document.querySelectorAll('table tbody tr')].map(row => ({
-  name: row.cells[0]?.textContent?.trim(),
-  value: row.cells[1]?.textContent?.trim(),
-  date: row.cells[2]?.textContent?.trim()
-})))"
+Only when the snapshot cannot express it (needs attributes, computed styles, precise
+cell alignment), spend the one second — and get everything in that single call:
+
+```bash
+playwright-cli run-code "async page => {
+  const rows = await page.evaluate(() => [...document.querySelectorAll('table tbody tr')].map(row => ({
+    name: row.cells[0]?.textContent?.trim(),
+    value: row.cells[1]?.textContent?.trim(),
+    date: row.cells[2]?.textContent?.trim()
+  })));
+  return JSON.stringify(rows);
+}"
 ```
 
 ### Table Extraction
+
+A real `<table>` surfaces in the snapshot as `table` / `row` / `cell` nodes with their
+text already in place — parse the file `goto` emitted and this costs nothing extra.
+Use the call below only when you need header-to-cell mapping the tree does not preserve,
+or attributes held on the cells (one call, ~1.1 s):
 
 ```bash
 # Extract a full HTML table as structured JSON
@@ -265,16 +354,29 @@ playwright-cli eval "(() => {
 
 ### Paginated Scraping
 
-```bash
-# Manual pagination — snapshot each page, click next
-playwright-cli open https://example.com/list?page=1
-playwright-cli snapshot
-# ... extract data from snapshot ...
-playwright-cli click e42  # "Next" button
-playwright-cli snapshot
-# ... repeat ...
+**Fastest (0 evals — 0.61 s for 10 pages).** Known URLs: navigate and parse each
+emitted snapshot. Nothing else runs.
 
-# Efficient: use run-code for multi-page scraping
+```bash
+for p in $(seq 1 10); do
+  playwright-cli -s=scrape goto "https://example.com/list?page=$p"
+done
+# each goto printed a .playwright-cli/page-*.yml path — parse those files locally,
+# then CHECK the record count before trusting the result
+```
+
+Must click through instead of guessing URLs — still 0 evals:
+
+```bash
+playwright-cli -s=scrape open https://example.com/list
+playwright-cli -s=scrape snapshot     # parse it, find the "Next" ref
+playwright-cli -s=scrape click e42
+playwright-cli -s=scrape snapshot     # parse, repeat
+```
+
+**When you need real DOM queries (1.13 s for 10 pages — one eval, not ten):**
+
+```bash
 playwright-cli run-code "async page => {
   const allItems = [];
   for (let p = 1; p <= 10; p++) {
@@ -416,27 +518,24 @@ test('authenticated dashboard loads', async ({ page }) => {
 
 Before writing assertions into test files, verify them interactively:
 
+Four separate `eval` checks cost 4.2 s. Gather every assertion in **one** call instead —
+same information, one second:
+
 ```bash
-# Check element visibility
-playwright-cli eval "document.querySelector('.success-message') !== null"
-
-# Check text content
-playwright-cli eval "document.querySelector('h1').textContent.trim()"
-
-# Check URL after navigation
-playwright-cli eval "window.location.href"
-
-# Check element count
-playwright-cli eval "document.querySelectorAll('.list-item').length"
-
-# Complex assertions via run-code
 playwright-cli run-code "async page => {
-  const count = await page.locator('.item').count();
+  const count = await page.locator('.list-item').count();
   const title = await page.title();
-  const url = page.url();
-  return { count, title, url, passed: count > 0 && title.includes('Dashboard') };
+  const url   = page.url();
+  const h1    = await page.locator('h1').textContent();
+  const ok    = await page.locator('.success-message').count() > 0;
+  return { count, title, url, h1: h1?.trim(), successVisible: ok,
+           passed: count > 0 && title.includes('Dashboard') };
 }"
 ```
+
+Cheaper still when you only need presence or text: `goto`/`snapshot` already emit the
+accessibility tree with roles, names and visibility — assert against that file for 0.04 s
+and skip the second entirely.
 
 ### Visual Regression Baseline
 
