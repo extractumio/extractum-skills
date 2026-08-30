@@ -81,6 +81,23 @@ Cost of a job is therefore ≈ `(number of eval/run-code calls) × 1.06 s`. Ever
    wrapper (`: "?` …) and strip it back off. This alone accounted for 4 lost records
    out of 100 on a real site — a 96 % result that looks like success.
 
+### Waiting for JS-rendered content — poll `snapshot`, never `run-code`
+
+`goto` returns before client-rendered content exists, so its auto-snapshot comes back
+empty on SPA pages. The obvious fix — `run-code "async page => page.waitForSelector(...)"` —
+costs the full 1.07 s **per page**. Re-issuing `snapshot` costs 0.040 s, so poll it instead:
+
+```bash
+playwright-cli -s=scrape goto https://example.com/js/page/1
+# parse the emitted file; if the expected nodes are missing, snapshot again
+playwright-cli -s=scrape snapshot     # 0.04 s per poll, repeat until content appears
+```
+
+Measured on a page that renders 120 ms after DOMContentLoaded: 3 polls per page,
+0.193 s per page, **1.94 s for 10 pages at 100/100 records** — against ~10.7 s for the
+`waitForSelector` version. Cap the loop (6–8 polls) and fall back to one `run-code`
+wait if it never settles, so a genuinely broken page fails fast instead of spinning.
+
 ### Snapshot-parsing recipe
 
 ```bash
