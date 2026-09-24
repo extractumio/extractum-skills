@@ -1,0 +1,200 @@
+{
+ "title": "Example District Eco Map",
+ "subtitle": "Air (all major pollutants), noise, water, industrial hazards and complaints · data as of YYYY-MM",
+ "slug": "example_ecomap",
+ "lang": "en",
+ "decimal": ".",
+ "bbox": [
+  43.66,
+  7.19,
+  43.74,
+  7.32
+ ],
+ "cell_m": 25,
+ "home": {
+  "name": "the city centre (Place Masséna)",
+  "lat": 43.6975,
+  "lon": 7.2705
+ },
+ "areas": [
+  {
+   "k": "home",
+   "name": "City centre",
+   "short": "Centre",
+   "lat": 43.6975,
+   "lon": 7.2705
+  },
+  {
+   "k": "b",
+   "name": "Comparison area B",
+   "short": "B",
+   "lat": 43.71,
+   "lon": 7.26
+  },
+  {
+   "k": "c",
+   "name": "Comparison area C",
+   "short": "C",
+   "lat": 43.695,
+   "lon": 7.295
+  }
+ ],
+ "radius_m": 400,
+ "center": [
+  43.7,
+  7.27
+ ],
+ "zoom": 14,
+ "files": {
+  "base": "base.json",
+  "meteo": "meteo.json",
+  "grids": "grids.json",
+  "stations": "stations.json",
+  "aq_inventory": "aq_inventory.json",
+  "prtr": "prtr.json",
+  "sources": "sources.json",
+  "incidents": "incidents.json",
+  "bath": "bath.json",
+  "polys": "polys.json",
+  "power": "power.geojson",
+  "coast": "coast.geojson",
+  "roads_named": "roads_named.json",
+  "port": "port.json",
+  "noise_lden": [
+   "noise_lden.geojson"
+  ],
+  "noise_ln": [
+   "noise_ln.geojson"
+  ]
+ },
+ "noise": {
+  "mode": "official",
+  "category_field": "category"
+ },
+ "traffic": {
+  "ef_g_per_vkm": 0.4
+ },
+ "stacks": [],
+ "no2": {
+  "background": 10.0,
+  "calib_years": [
+   "2024",
+   "2025"
+  ],
+  "exclude": []
+ },
+ "odour": [
+  [
+   43.7,
+   7.25,
+   0.8,
+   "Wastewater treatment plant (example)"
+  ]
+ ],
+ "dust": [
+  [
+   43.69,
+   7.29,
+   0.7,
+   "Port bulk terminal (example)"
+  ]
+ ],
+ "hazard": {
+  "upper": [
+   250,
+   750
+  ],
+  "lower": [
+   150,
+   400
+  ]
+ },
+ "overlays": [
+  [
+   "src",
+   "Pollution sources",
+   1
+  ],
+  [
+   "emit",
+   "Reported emitters (PRTR)",
+   1
+  ],
+  [
+   "polys",
+   "Site outlines",
+   1
+  ],
+  [
+   "tanks",
+   "Storage tanks (OSM)",
+   1
+  ],
+  [
+   "hazard",
+   "Major-hazard consequence rings",
+   1
+  ],
+  [
+   "inc",
+   "Incidents & complaints",
+   1
+  ],
+  [
+   "incheat",
+   "Complaint heatmap",
+   0
+  ],
+  [
+   "st",
+   "Air-quality stations",
+   1
+  ],
+  [
+   "bath",
+   "Beaches (latest class)",
+   1
+  ],
+  [
+   "roads",
+   "Major roads (AADT)",
+   0
+  ],
+  [
+   "power",
+   "Power lines & substations",
+   0
+  ],
+  [
+   "coast",
+   "Coastal hazard",
+   0
+  ],
+  [
+   "areas",
+   "Compared areas",
+   1
+  ]
+ ],
+ "summaryNote": "State whether the ranking holds with measured factors only (index NO₂ + noise).",
+ "findings": [
+  {
+   "h": "Key findings"
+  },
+  {
+   "level": "warn",
+   "title": "Bold lead sentence with a number and a range.",
+   "text": "Detail: source, distance, season, reference value, uncertainty."
+  },
+  {
+   "level": "good",
+   "title": "Something that is fine, with evidence.",
+   "text": "…"
+  }
+ ],
+ "pol_html": "<h2>What is missing and who has it</h2><p class='small muted'>List pollutants not monitored here, the nearest place/period they were, and which agency or operator could provide data.</p>",
+ "windNote": "Which sources are upwind in which season (bearing + sector frequency).",
+ "method_html": "<h2>How the layers were built</h2><p class='small muted'>Data, models, calibration, limits.</p>",
+ "sources_html": "<h2>Data sources</h2><p class='tiny'>Agencies, datasets, publications, retrieval date.</p>",
+ "attribution": "© OpenStreetMap contributors · national agencies · EEA · CAMS/Open-Meteo"
+}
